@@ -1,0 +1,9 @@
+<nav class="bottom-toolbar" aria-label="Main">
+    @foreach (var item in AppNavigation.Items)
+    {
+        <NavLink class="toolbar-item" href="@item.Href" Match="@(item.Href.Length == 0 ? NavLinkMatch.All : NavLinkMatch.Prefix)">
+            <ToolbarIcon Icon="item.Icon" />
+            <span class="toolbar-label">@item.Label</span>
+        </NavLink>
+    }
+</nav>

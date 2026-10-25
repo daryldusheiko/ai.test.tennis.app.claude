@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="app.claude.tennis.BrowserTests/app.claude.tennis.BrowserTests.csproj" />
+  <Project Path="app.claude.tennis.Tests/app.claude.tennis.Tests.csproj" />
+  <Project Path="app.claude.tennis/app.claude.tennis.csproj" />
+</Solution>
