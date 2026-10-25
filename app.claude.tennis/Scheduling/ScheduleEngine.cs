@@ -92,7 +92,7 @@ public static class ScheduleEngine
         return
         [
             .. built.Rounds.Select(round => new Round(
-                [.. round.Games.Select(game => new Game(Ids(game.Team1, players), Ids(game.Team2, players)))],
+                [.. round.Games.Select(game => new Game(Ids(game.Team1, players), Ids(game.Team2, players), false))],
                 Ids(round.SittingOut, players))),
         ];
     }

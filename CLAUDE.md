@@ -41,7 +41,7 @@ Rules for working with them:
   - `Navigation/`: plain logic for the toolbar items and header titles (`AppNavigation`).
   - `Layout/`: `MainLayout` (header, content, toolbar), `BottomToolbar`, `ToolbarIcon`, `ConfirmDialog` (centred confirmation), and the schedule components `CourtsStep`, `PlayersStep`, `ScheduleReview`, `ScheduleCards` (round cards, shared by Review and Play), `PlayerLabel`.
   - `Players/`: plain logic: `Player`, `PlayerValidator`, `PlayerList` (search and sort), `PlayerService` (storage), `PlayerJsonContext`.
-  - `Scheduling/`: plain logic: `Schedule` (and `Round`, `Game`, `SchedulePlayer`, `ScheduleStep`), `ScheduleEngine` (the schedule rules), `ScheduleFlow` (create steps, play, reorder), `CourtList` (parse courts), `PlayerNames` (short names), `ScheduleService` (storage), `ScheduleJsonContext`.
+  - `Scheduling/`: plain logic: `Schedule` (and `Round`, `Game`, `SchedulePlayer`, `ScheduleStep`), `ScheduleEngine` (the schedule rules), `ScheduleFlow` (create steps, play, reorder), `CourtList` (parse courts), `PlayerNames` (short names), `ScheduleService` (storage), `ScheduleStorageJsonContext`.
   - `Storage/`: `IKeyValueStorage` and `LocalStorage` (browser localStorage via JS interop).
   - `Pages/`: thin routed pages (Play `/`, Players `/players`, PlayerEdit `/players/add` and `/players/edit/{id}`, SchedulePage `/schedule`, About, NotFound).
   - `wwwroot/`: `index.html`, `manifest.webmanifest`, icons, `js/pwa.js`, `js/reorder.js` (drag to reorder), `service-worker.js` (dev, no-op) and `service-worker.published.js` (offline cache, used by publish).

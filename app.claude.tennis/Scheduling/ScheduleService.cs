@@ -18,7 +18,7 @@ public sealed class ScheduleService(IKeyValueStorage storage)
 
         try
         {
-            var stored = JsonSerializer.Deserialize(json, ScheduleJsonContext.Default.Schedule);
+            var stored = JsonSerializer.Deserialize(json, ScheduleStorageJsonContext.Default.Schedule);
             return stored is null ? null : Normalise(stored);
         }
         catch (JsonException)
@@ -31,7 +31,7 @@ public sealed class ScheduleService(IKeyValueStorage storage)
     public Task SaveAsync(Schedule schedule)
     {
         ArgumentNullException.ThrowIfNull(schedule);
-        return storage.SetAsync(ScheduleKey, JsonSerializer.Serialize(schedule, ScheduleJsonContext.Default.Schedule));
+        return storage.SetAsync(ScheduleKey, JsonSerializer.Serialize(schedule, ScheduleStorageJsonContext.Default.Schedule));
     }
 
     public Task DeleteAsync() => storage.SetAsync(ScheduleKey, string.Empty);
