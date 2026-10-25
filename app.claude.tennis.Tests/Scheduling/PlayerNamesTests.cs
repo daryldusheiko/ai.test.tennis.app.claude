@@ -39,8 +39,6 @@ public class PlayerNamesTests
     }
 
     [Test]
-    public void NameOf_UnknownPlayer_ShowsAQuestionMark()
-    {
+    public void NameOf_UnknownPlayer_ShowsAQuestionMark() =>
         Assert.That(new PlayerNames([]).NameOf(Guid.NewGuid()), Is.EqualTo("?"));
-    }
 }

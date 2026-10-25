@@ -69,6 +69,16 @@ Run from the repo root:
 - Schedule (task 3): one schedule in localStorage (`socialTennis.schedule`), saved after every step and resumed at the same `ScheduleStep` (Courts, Players, Review, InPlay). `SchedulePage` switches between `CourtsStep`, `PlayersStep` and `ScheduleReview`. `ScheduleEngine.Generate(players, courtCount, seed)` is a seeded randomised search; the Play page shows an in-play schedule read only with court numbers. Drag to reorder uses pointer events in `js/reorder.js`, which only reports the move back to `ScheduleCards`.
 - About is a placeholder until a later task fills it in.
 
+## Zero diagnostics rule
+
+**No errors, warnings or messages.** That includes IDE-only suggestions and hints, not just what `dotnet build` prints. Before calling any work done:
+
+- `dotnet build` and `dotnet build -c Release` show 0 warnings and 0 errors.
+- `dotnet format style SocialTennis.slnx --verify-no-changes --severity info` and `dotnet format analyzers SocialTennis.slnx --verify-no-changes --severity info` report nothing.
+- The IDE diagnostics (VS Code Problems) for the repo's files are empty. Stale entries for the unrelated `Claude.Tennis.App` solution outside the repo are not ours.
+
+Fix the cause; never suppress.
+
 ## Maintaining this file
 
 Update this file as part of finishing each task, not afterwards:

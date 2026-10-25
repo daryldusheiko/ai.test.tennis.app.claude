@@ -62,7 +62,7 @@ public class ScheduleServiceTests
     public async Task GetAsync_FieldsMissingAndUnknownFieldsPresent_LoadsWithEmptyLists()
     {
         var storage = new InMemoryStorage();
-        storage.Values[ScheduleService.ScheduleKey] = """{"Id":"00000000-0000-0000-0000-000000000001","Step":"Players","FutureField":1}""";
+        storage.Values[ScheduleService.ScheduleKey] = /*lang=json,strict*/ """{"Id":"00000000-0000-0000-0000-000000000001","Step":"Players","FutureField":1}""";
 
         var loaded = await new ScheduleService(storage).GetAsync();
 

@@ -23,10 +23,8 @@ public class CourtListTests
     [TestCase("   ")]
     [TestCase(",,")]
     [TestCase(null)]
-    public void Parse_NothingEntered_AsksForACourt(string? text)
-    {
+    public void Parse_NothingEntered_AsksForACourt(string? text) =>
         Assert.That(CourtList.Parse(text).Error, Is.EqualTo("Enter at least one court number, for example 4,5,6."));
-    }
 
     [TestCase("4,x,6", "“x” is not a court number.")]
     [TestCase("4.5", "“4.5” is not a court number.")]

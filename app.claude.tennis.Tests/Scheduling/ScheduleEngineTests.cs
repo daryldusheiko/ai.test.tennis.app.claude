@@ -140,16 +140,12 @@ public class ScheduleEngineTests
     }
 
     [Test]
-    public void Generate_LessThanFourPlayers_Throws()
-    {
+    public void Generate_LessThanFourPlayers_Throws() =>
         Assert.That(() => ScheduleEngine.Generate(TestPlayers.Mixed(3), 3, 1), Throws.InstanceOf<ArgumentException>());
-    }
 
     [Test]
-    public void Generate_NoCourts_Throws()
-    {
+    public void Generate_NoCourts_Throws() =>
         Assert.That(() => ScheduleEngine.Generate(TestPlayers.Mixed(8), 0, 1), Throws.InstanceOf<ArgumentOutOfRangeException>());
-    }
 
     [Test]
     public void RoundsPossible_SmallSessions_MatchTheSpec()
