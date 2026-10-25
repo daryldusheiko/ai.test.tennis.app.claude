@@ -1,0 +1,146 @@
+@inject PlayerService PlayerStore
+
+<div class="page-section">
+    <h2>Players</h2>
+
+    @if (_all is null)
+    {
+        <p class="page-message">Loading…</p>
+    }
+    else if (_all.Count == 0)
+    {
+        <p class="page-message">No players yet. <a href="players">Add players</a> first, then come back.</p>
+        <div class="form-buttons">
+            <button type="button" class="button" @onclick="BackAsync">Back</button>
+        </div>
+    }
+    else
+    {
+        <label class="field-label" for="add-players">Add players</label>
+        <div class="search-row">
+            <input id="add-players" type="search" class="field" placeholder="Type a name" autocomplete="off" autocapitalize="off" spellcheck="false"
+                   value="@_search" @oninput="OnSearchChanged" disabled="@_generating" />
+            <button type="button" class="button primary" disabled="@(_selected is null || _generating)" @onclick="AddAsync">Add</button>
+        </div>
+
+        @if (Suggestions.Count > 0)
+        {
+            <ul class="suggestions" aria-label="Matching players">
+                @foreach (var player in Suggestions)
+                {
+                    <li>
+                        <button type="button" class="suggestion" aria-pressed="@(player.Id == _selected ? "true" : "false")" @onclick="() => _selected = player.Id">@player.FullName</button>
+                    </li>
+                }
+            </ul>
+        }
+        else if (!string.IsNullOrWhiteSpace(_search))
+        {
+            <p class="page-message">No matching players.</p>
+        }
+
+        <h3>Playing (@_chosen.Count)</h3>
+        @if (_chosen.Count == 0)
+        {
+            <p class="page-message">Nobody added yet.</p>
+        }
+        else
+        {
+            <ul class="player-list">
+                @foreach (var player in _chosen)
+                {
+                    <li>
+                        <span class="player-name"><span>@player.FirstName</span> <span>@player.LastName</span></span>
+                        <button type="button" class="button" aria-label="Remove @player.FullName" disabled="@_generating" @onclick="() => RemoveAsync(player)">Remove</button>
+                    </li>
+                }
+            </ul>
+        }
+
+        @if (_chosen.Count < ScheduleEngine.MinPlayers)
+        {
+            <p class="page-message">Add at least 4 players.</p>
+        }
+
+        @if (_generating)
+        {
+            <p class="page-message" role="status">Matching players…</p>
+        }
+
+        <div class="form-buttons">
+            <button type="button" class="button" disabled="@_generating" @onclick="BackAsync">Back</button>
+            <button type="button" class="button primary" disabled="@(_chosen.Count < ScheduleEngine.MinPlayers || _generating)" @onclick="NextAsync">Next</button>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<Player>? _all;
+    private List<SchedulePlayer> _chosen = [];
+    private string _search = string.Empty;
+    private Guid? _selected;
+    private bool _generating;
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<SchedulePlayer> Chosen { get; set; } = [];
+
+    /// <summary>Called after every add or remove so the list is saved as it changes.</summary>
+    [Parameter]
+    public EventCallback<IReadOnlyList<SchedulePlayer>> OnChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<IReadOnlyList<SchedulePlayer>> OnBack { get; set; }
+
+    [Parameter]
+    public EventCallback<IReadOnlyList<SchedulePlayer>> OnNext { get; set; }
+
+    private IReadOnlyList<Player> Suggestions =>
+        PlayerList.Suggest(_all ?? [], _search, _chosen.Select(player => player.Id).ToHashSet(), ScheduleFlow.SearchSuggestionLimit);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _chosen = [.. Chosen];
+        _all = await PlayerStore.GetAllAsync();
+    }
+
+    private void OnSearchChanged(ChangeEventArgs e)
+    {
+        _search = e.Value?.ToString() ?? string.Empty;
+        if (_selected is { } selected && Suggestions.All(player => player.Id != selected))
+        {
+            _selected = null;
+        }
+    }
+
+    private async Task AddAsync()
+    {
+        var player = _all?.FirstOrDefault(candidate => candidate.Id == _selected);
+        if (player is null || _chosen.Any(existing => existing.Id == player.Id))
+        {
+            return;
+        }
+
+        _chosen.Add(new SchedulePlayer(player.Id, player.FirstName, player.LastName, player.Rank));
+        _search = string.Empty;
+        _selected = null;
+        await OnChanged.InvokeAsync(_chosen);
+    }
+
+    private async Task RemoveAsync(SchedulePlayer player)
+    {
+        _chosen.Remove(player);
+        await OnChanged.InvokeAsync(_chosen);
+    }
+
+    private Task BackAsync() => OnBack.InvokeAsync(_chosen);
+
+    private async Task NextAsync()
+    {
+        _generating = true;
+        StateHasChanged();
+
+        // Generation runs on the one browser thread, so let the "Matching players…" message paint first.
+        await Task.Delay(50);
+        await OnNext.InvokeAsync(_chosen);
+    }
+}

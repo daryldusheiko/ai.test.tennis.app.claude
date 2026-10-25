@@ -69,4 +69,24 @@ public class PlayerListTests
     [Test]
     public void Search_NoMatch_IsEmpty() =>
         Assert.That(PlayerList.Search(People, "xyz"), Is.Empty);
+
+    [Test]
+    public void Suggest_OneLetter_MatchesFirstOrLastNameAndSortsByFirstName() =>
+        Assert.That(Names(PlayerList.Suggest(People, "z", new HashSet<Guid>(), 8)), Is.EqualTo(["Cat Zed"]));
+
+    [Test]
+    public void Suggest_NothingTyped_SuggestsNobody() =>
+        Assert.That(PlayerList.Suggest(People, "  ", new HashSet<Guid>(), 8), Is.Empty);
+
+    [Test]
+    public void Suggest_PlayerAlreadyAdded_IsLeftOut() =>
+        Assert.That(Names(PlayerList.Suggest(People, "a", new HashSet<Guid> { People[1].Id }, 8)), Is.EqualTo(["Ann Brown", "Bob Adams", "Cat Zed"]));
+
+    [Test]
+    public void Suggest_MoreMatchesThanTheLimit_ReturnsOnlyTheLimit()
+    {
+        var many = Enumerable.Range(0, 20).Select(i => Make($"Pat{i:00}", "Lee")).ToList();
+
+        Assert.That(PlayerList.Suggest(many, "pat", new HashSet<Guid>(), 8), Has.Count.EqualTo(8));
+    }
 }

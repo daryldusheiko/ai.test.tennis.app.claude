@@ -1,4 +1,36 @@
 @page "/"
+@inject ScheduleService Schedules
 
 <PageTitle>Social Tennis</PageTitle>
-<p class="page-placeholder">No schedule in play.</p>
+
+@if (_loading)
+{
+    <p class="page-message">Loading…</p>
+}
+else if (_schedule is not { Step: ScheduleStep.InPlay })
+{
+    <div class="page-section">
+        <p class="page-message">No schedule in play.</p>
+        <p class="page-message">@(_schedule is null ? "Create one on the Schedule page." : "Finish setting it up on the Schedule page, then tap Play.")</p>
+    </div>
+}
+else
+{
+    <div class="page-section">
+        <ScheduleCards Schedule="_schedule" ShowCourts="true" />
+        <div class="form-buttons">
+            <a class="button" href="schedule">Edit</a>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private Schedule? _schedule;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _schedule = await Schedules.GetAsync();
+        _loading = false;
+    }
+}
