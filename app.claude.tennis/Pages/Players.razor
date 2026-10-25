@@ -1,4 +1,76 @@
 @page "/players"
+@inject PlayerService PlayerStore
 
 <PageTitle>Social Tennis</PageTitle>
-<p class="page-placeholder">Players will appear here.</p>
+
+@if (_players is null)
+{
+    <p class="page-message">Loading…</p>
+}
+else
+{
+    <div class="page-section">
+        <div class="toolbar-row">
+            <a class="button primary" href="players/add">Add player</a>
+        </div>
+
+        <input type="search" class="field" placeholder="Search players" aria-label="Search players"
+               autocomplete="off" autocapitalize="off" spellcheck="false"
+               value="@_search" @oninput="OnSearchChanged" />
+
+        <label class="field-label" for="player-sort">Sort by</label>
+        <select id="player-sort" class="field" value="@_sort" @onchange="OnSortChanged">
+            @foreach (var (order, label) in PlayerList.SortOptions)
+            {
+                <option value="@order">@label</option>
+            }
+        </select>
+
+        @if (_players.Count == 0)
+        {
+            <p class="page-message">No players yet. Add your first player.</p>
+        }
+        else if (Visible.Count == 0)
+        {
+            <p class="page-message">No players match “@_search”.</p>
+        }
+        else
+        {
+            <ul class="player-list">
+                @foreach (var player in Visible)
+                {
+                    <li>
+                        <span class="player-name">@player.FullName</span>
+                        <a class="button" href="players/edit/@player.Id" aria-label="Edit @player.FullName">Edit</a>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+}
+
+@code {
+    private IReadOnlyList<Player>? _players;
+    private PlayerSortOrder _sort;
+    private string _search = string.Empty;
+
+    private IReadOnlyList<Player> Visible =>
+        PlayerList.Sort(PlayerList.Search(_players ?? [], _search), _sort);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _sort = await PlayerStore.GetSortOrderAsync();
+        _players = await PlayerStore.GetAllAsync();
+    }
+
+    private void OnSearchChanged(ChangeEventArgs e) => _search = e.Value?.ToString() ?? string.Empty;
+
+    private async Task OnSortChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<PlayerSortOrder>(e.Value?.ToString(), out var order))
+        {
+            _sort = order;
+            await PlayerStore.SetSortOrderAsync(order);
+        }
+    }
+}

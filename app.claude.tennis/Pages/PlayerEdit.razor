@@ -1,0 +1,137 @@
+@page "/players/add"
+@page "/players/edit/{Id:guid}"
+@inject PlayerService PlayerStore
+@inject NavigationManager Navigation
+
+<PageTitle>Social Tennis</PageTitle>
+
+@if (_loading)
+{
+    <p class="page-message">Loading…</p>
+}
+else if (_missing)
+{
+    <div class="page-section">
+        <a class="back-link" href="players">‹ Players</a>
+        <p class="page-message">This player no longer exists.</p>
+    </div>
+}
+else
+{
+    <form class="page-section" @onsubmit="SaveAsync" novalidate>
+        <a class="back-link" href="players">‹ Players</a>
+        <h2>@(IsEdit ? "Edit player" : "Add player")</h2>
+
+        <label class="field-label" for="first-name">First name</label>
+        <input id="first-name" class="field" autocomplete="off" @bind="_firstName" @bind:event="oninput" />
+
+        <label class="field-label" for="last-name">Last name</label>
+        <input id="last-name" class="field" autocomplete="off" @bind="_lastName" @bind:event="oninput" />
+
+        <label class="field-label" for="rank">Rank</label>
+        <select id="rank" class="field" @bind="_rank">
+            <option value="">None</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+        </select>
+
+        <label class="field-label" for="comment">Comment</label>
+        <textarea id="comment" class="field" rows="4" @bind="_comment" @bind:event="oninput"></textarea>
+
+        @if (_errors.Count > 0)
+        {
+            <ul class="errors" role="alert">
+                @foreach (var error in _errors)
+                {
+                    <li>@error</li>
+                }
+            </ul>
+        }
+
+        <div class="form-buttons">
+            <button type="submit" class="button primary">Save</button>
+            @if (IsEdit)
+            {
+                <button type="button" class="button danger" @onclick="() => _confirmDelete = true">Delete player</button>
+            }
+        </div>
+    </form>
+
+    @if (_confirmDelete)
+    {
+        <ConfirmDialog Title="Delete player?"
+                       Message="@($"{FullName} will be removed. This can't be undone.")"
+                       ConfirmText="Delete"
+                       OnConfirm="DeleteAsync"
+                       OnCancel="() => _confirmDelete = false" />
+    }
+}
+
+@code {
+    private bool _loading = true;
+    private bool _missing;
+    private bool _confirmDelete;
+    private Guid _playerId = Guid.NewGuid();
+    private string _firstName = string.Empty;
+    private string _lastName = string.Empty;
+    private string _rank = string.Empty;
+    private string _comment = string.Empty;
+    private IReadOnlyList<string> _errors = [];
+
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    private bool IsEdit => Id is not null;
+
+    private string FullName => $"{_firstName} {_lastName}".Trim();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _missing = false;
+        if (Id is { } id)
+        {
+            var player = await PlayerStore.GetAsync(id);
+            if (player is null)
+            {
+                _missing = true;
+            }
+            else
+            {
+                _playerId = player.Id;
+                _firstName = player.FirstName;
+                _lastName = player.LastName;
+                _rank = player.Rank?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+                _comment = player.Comment;
+            }
+        }
+
+        _loading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        var player = new Player(
+            _playerId,
+            _firstName,
+            _lastName,
+            int.TryParse(_rank, out var rank) ? rank : null,
+            _comment);
+
+        _errors = PlayerValidator.Validate(player);
+        if (_errors.Count > 0)
+        {
+            return;
+        }
+
+        await PlayerStore.SaveAsync(player);
+        Navigation.NavigateTo("players");
+    }
+
+    private async Task DeleteAsync()
+    {
+        await PlayerStore.DeleteAsync(_playerId);
+        Navigation.NavigateTo("players");
+    }
+}

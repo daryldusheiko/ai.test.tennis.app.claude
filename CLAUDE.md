@@ -39,8 +39,10 @@ Rules for working with them:
 - Repo root: `SocialTennis.slnx` (every project), `Directory.Build.props` (shared build settings and StyleCop), `.editorconfig`, `stylecop.json`, `scripts/`, `.github/workflows/deploy.yml`, `README.md`, `.gitignore` and this file.
 - `app.claude.tennis/`: the .NET 10 Blazor WebAssembly PWA (root namespace `SocialTennis`).
   - `Navigation/`: plain logic for the toolbar items and header titles (`AppNavigation`).
-  - `Layout/`: `MainLayout` (header, content, toolbar), `BottomToolbar`, `ToolbarIcon`.
-  - `Pages/`: thin routed pages (Play `/`, Players, Schedule, About, NotFound).
+  - `Layout/`: `MainLayout` (header, content, toolbar), `BottomToolbar`, `ToolbarIcon`, `ConfirmDialog` (centred confirmation).
+  - `Players/`: plain logic: `Player`, `PlayerValidator`, `PlayerList` (search and sort), `PlayerService` (storage), `PlayerJsonContext`.
+  - `Storage/`: `IKeyValueStorage` and `LocalStorage` (browser localStorage via JS interop).
+  - `Pages/`: thin routed pages (Play `/`, Players `/players`, PlayerEdit `/players/add` and `/players/edit/{id}`, Schedule, About, NotFound).
   - `wwwroot/`: `index.html`, `manifest.webmanifest`, icons, `js/pwa.js`, `service-worker.js` (dev, no-op) and `service-worker.published.js` (offline cache, used by publish).
   - `icon-source/icon.svg`: source of the PNG icons (rendered by hand with headless Chrome).
   - `docs/`: the governing documents.
@@ -62,7 +64,8 @@ Run from the repo root:
 - Entry point `Program.cs` mounts `App` on `#app`. `App.razor` routes with `MainLayout`; `NotFound` is the not-found page.
 - `MainLayout` shows an `h1` header with the current page label (from `AppNavigation.TitleFor`, updated on `LocationChanged`), the page in a scrolling `main`, and `BottomToolbar` (four `NavLink`s with SVG icons) at the bottom. Safe-area insets are respected. Light and dark colours are CSS variables in `wwwroot/css/app.css` (follows the device; a `data-theme` override is ready for the About page task).
 - Offline: `service-worker.published.js` precaches every file in the generated `service-worker-assets.js` manifest (no integrity checks, see Decisions), answers navigations with the cached `index.html`, deletes older caches on activate, and takes over at once (`skipWaiting` + `clients.claim`). `js/pwa.js` registers it and reloads once when a new version takes control.
-- Pages are placeholders until the later tasks fill them in.
+- Players (task 2): `Players.razor` lists, searches and sorts; `PlayerEdit.razor` adds, edits and deletes (with `ConfirmDialog`). Players are one JSON list in localStorage (`socialTennis.players`) and the sort choice is stored as `socialTennis.playerSort`; `PlayerService` is the only code that touches them. Serialisation is source-generated for trimming.
+- Schedule, About and Play are placeholders until the later tasks fill them in.
 
 ## Maintaining this file
 
@@ -75,7 +78,7 @@ Update this file as part of finishing each task, not afterwards:
 ## Task progress
 
 - [x] task1
-- [ ] task2
+- [x] task2
 - [ ] task3
 - [ ] task4
 - [ ] task5
@@ -95,3 +98,12 @@ Update this file as part of finishing each task, not afterwards:
 - **Deploy:** `.github/workflows/deploy.yml` runs all tests on push to `master`, then publishes with `scripts/publish.sh` under `/<repo-name>/` and deploys to GitHub Pages. Version stamping and the About page version arrive with the About task.
 - **Test projects** are named `app.claude.tennis.Tests` and `app.claude.tennis.BrowserTests` with namespaces `SocialTennis.Tests` and `SocialTennis.BrowserTests`.
 - **Not applicable yet:** dialog-fit and stamped-version browser tests (no dialogs or About version exist until later tasks).
+
+### Task 2
+
+- **Scope:** add, edit, delete, list, search and sort players, kept on the phone. Import and Backup/restore from `spec.md` are not in `task2.md`, so they are left for later.
+- **Spec wins where `task2.md` is looser:** last name is optional, the spec's validation messages, search wording and sort labels are used, and the sort drop-down is labelled "Sort by".
+- **Storage:** plain localStorage through `IKeyValueStorage` (no package). Unreadable stored data loads as an empty list rather than stopping the app. Ranks above 3 load as 3. Unknown or missing JSON fields are tolerated so later versions can add fields.
+- **Sorting** uses ordinal, case-insensitive comparison so results do not depend on the browser's culture data.
+- **Validation** runs when Save is pressed (no `maxlength` on the inputs, so the spec's length messages can show).
+- **Branch:** `feature/task1` was not yet merged into `develop`, so task 2 work sits on top of it.
