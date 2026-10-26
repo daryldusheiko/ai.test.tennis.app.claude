@@ -1,5 +1,7 @@
 @page "/players"
 @inject PlayerService PlayerStore
+@inject BackupFiles Backup
+@inject TimeProvider Clock
 
 <PageTitle>Social Tennis</PageTitle>
 
@@ -12,7 +14,13 @@ else
     <div class="page-section">
         <div class="toolbar-row">
             <a class="button primary" href="players/add">Add player</a>
+            <button type="button" class="button" @onclick="() => _importing = true">Import</button>
         </div>
+
+        @if (_message.Length > 0)
+        {
+            <p class="notice" role="status">@_message</p>
+        }
 
         <input type="search" class="field" placeholder="Search players" aria-label="Search players"
                autocomplete="off" autocapitalize="off" spellcheck="false"
@@ -46,13 +54,37 @@ else
                 }
             </ul>
         }
+
+        <section class="backup-section" aria-labelledby="backup-heading">
+            <h2 id="backup-heading">Backup</h2>
+            <p>Players are stored on this phone. Save a backup now and then so you can restore them if the app is ever removed.</p>
+            @if (_folders is { } folders)
+            {
+                <p>@(folders ? "Backups are kept in a social.tennis.app folder. The first time, choose Documents and the folder is created there."
+                    : "Keep backups in a social.tennis.app folder in Documents: choose Save to Files, open Documents, and create the folder the first time. To restore, open that folder (or wherever you saved the file).")</p>
+            }
+
+            <div class="form-buttons">
+                <button type="button" class="button" disabled="@(_players.Count == 0 || _busy)" @onclick="SaveBackupAsync">Save backup</button>
+                <button type="button" class="button" disabled="@_busy" @onclick="RestoreAsync">Restore from backup</button>
+            </div>
+        </section>
     </div>
+}
+
+@if (_importing)
+{
+    <ImportDialog OnCancel="() => _importing = false" OnSave="ImportAsync" />
 }
 
 @code {
     private IReadOnlyList<Player>? _players;
     private PlayerSortOrder _sort;
     private string _search = string.Empty;
+    private string _message = string.Empty;
+    private bool _importing;
+    private bool _busy;
+    private bool? _folders;
 
     private IReadOnlyList<Player> Visible =>
         PlayerList.Sort(PlayerList.Search(_players ?? [], _search), _sort);
@@ -61,6 +93,73 @@ else
     {
         _sort = await PlayerStore.GetSortOrderAsync();
         _players = await PlayerStore.GetAllAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _folders = await Backup.SupportsFoldersAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task ImportAsync(ImportResult result)
+    {
+        var incoming = result.Players.Select(player => new Player(Guid.NewGuid(), player.FirstName, player.LastName, player.Rank, string.Empty));
+        var merged = await PlayerStore.AddRangeAsync(incoming);
+        _players = await PlayerStore.GetAllAsync();
+        _message = PlayerMessages.Imported(merged.Added, merged.Skipped);
+        _importing = false;
+    }
+
+    private async Task SaveBackupAsync()
+    {
+        _busy = true;
+        try
+        {
+            var name = PlayerBackup.FileName(DateOnly.FromDateTime(Clock.GetLocalNow().DateTime));
+            var outcome = await Backup.SaveAsync(name, PlayerBackup.Create(_players ?? []));
+            _message = outcome == BackupSaveOutcome.Cancelled
+                ? string.Empty
+                : PlayerMessages.BackupSaved(_players?.Count ?? 0, outcome == BackupSaveOutcome.Folder);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RestoreAsync()
+    {
+        _busy = true;
+        try
+        {
+            var pick = await Backup.PickAsync(PlayerBackup.MaxLength);
+            if (pick.Outcome == BackupPickOutcome.Cancelled)
+            {
+                return;
+            }
+
+            var read = pick.Outcome == BackupPickOutcome.TooLarge
+                ? new BackupReadResult(BackupReadStatus.TooLarge, [])
+                : PlayerBackup.Read(pick.Text);
+            if (read.Status != BackupReadStatus.Ok)
+            {
+                _message = read.Status == BackupReadStatus.TooLarge
+                    ? "That file is too large to be a players backup."
+                    : "That file isn't a Social Tennis players backup.";
+                return;
+            }
+
+            var merged = await PlayerStore.AddRangeAsync(read.Players);
+            _players = await PlayerStore.GetAllAsync();
+            _message = PlayerMessages.Restored(merged.Added, merged.Skipped);
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private void OnSearchChanged(ChangeEventArgs e) => _search = e.Value?.ToString() ?? string.Empty;

@@ -7,6 +7,13 @@ internal static class PublishedSite
 {
     public const string SubPath = "/tennis/";
 
+    /// <summary>The values the test publish is stamped with, as the deploy stamps its own, so the About page can be checked.</summary>
+    public const string StampedVersion = "1.0.42";
+
+    public const string StampedCommit = "abc1234";
+
+    public const string StampedReleased = "2026-03-07";
+
     private static string? _workDirectory;
 
     public static StaticSiteServer Root { get; private set; } = null!;
@@ -18,11 +25,21 @@ internal static class PublishedSite
         var repo = FindRepositoryRoot();
         _workDirectory = Path.Combine(Path.GetTempPath(), "social-tennis-browser-tests-" + Guid.NewGuid().ToString("N"));
         var output = Path.Combine(_workDirectory, "root");
-        await RunAsync(repo, "scripts/publish.sh", output, "/");
+        await RunAsync(
+            repo,
+            new Dictionary<string, string>
+            {
+                ["APP_VERSION"] = StampedVersion,
+                ["APP_COMMIT"] = StampedCommit,
+                ["APP_RELEASED"] = StampedReleased,
+            },
+            "scripts/publish.sh",
+            output,
+            "/");
 
         var sub = Path.Combine(_workDirectory, "sub");
         CopyDirectory(Path.Combine(output, "site"), sub);
-        await RunAsync(repo, "scripts/set-base.sh", sub, SubPath);
+        await RunAsync(repo, [], "scripts/set-base.sh", sub, SubPath);
 
         Root = new StaticSiteServer(Path.Combine(output, "site"), "/");
         Sub = new StaticSiteServer(sub, SubPath);
@@ -65,7 +82,7 @@ internal static class PublishedSite
         }
     }
 
-    private static async Task RunAsync(string repo, string script, params string[] arguments)
+    private static async Task RunAsync(string repo, Dictionary<string, string> environment, string script, params string[] arguments)
     {
         var start = new ProcessStartInfo("bash")
         {
@@ -73,6 +90,11 @@ internal static class PublishedSite
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
+        foreach (var (name, value) in environment)
+        {
+            start.Environment[name] = value;
+        }
+
         start.ArgumentList.Add(script);
         foreach (var argument in arguments)
         {

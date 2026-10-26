@@ -1,4 +1,63 @@
 @page "/about"
+@inject VersionService Versions
+@inject ThemeService Themes
 
 <PageTitle>Social Tennis</PageTitle>
-<p class="page-placeholder">Social Tennis</p>
+
+@if (_version is null)
+{
+    <p class="page-message">Loading…</p>
+}
+else
+{
+    <div class="page-section about">
+        <h2>Social Tennis</h2>
+        <p class="about-version">@_version.VersionText</p>
+        <p class="about-released">@_version.ReleasedText</p>
+
+        <fieldset class="theme-choice">
+            <legend>Theme</legend>
+            @foreach (var (choice, label) in Choices)
+            {
+                <label class="theme-option">
+                    <input type="radio" name="theme" value="@choice" checked="@(_theme == choice)" @onchange="() => ChooseAsync(choice)" />
+                    <span>@label</span>
+                </label>
+            }
+        </fieldset>
+
+        <h2>How to use</h2>
+        <ol class="how-to">
+            <li><strong>Players:</strong> add everyone once (or Import a list). Names are remembered on the phone.</li>
+            <li><strong>Schedule:</strong> Create schedule, enter the court numbers, then add today's players by typing the first letters of their names.</li>
+            <li><strong>Review:</strong> six rounds with no repeat partners; leftover players play a three-player game or singles. Drag (||) to reorder. Edit to add a player. Press and hold a name to pin, unpin, swap or remove. Re-schedule fixes red clashes.</li>
+            <li><strong>Play:</strong> Play shows the schedule on the Play page. Each round's ⋮ button starts, finishes or cancels it. Balls are blue (not started), green (in play) or grey (complete).</li>
+            <li><strong>Finish:</strong> Close schedule on the Play page when the session is over. Your players are kept.</li>
+        </ol>
+        <p>The app works offline once installed (Safari → Share → Add to Home Screen). Save a backup from the Players page now and then.</p>
+    </div>
+}
+
+@code {
+    private static readonly (ThemeChoice Choice, string Label)[] Choices =
+    [
+        (ThemeChoice.Light, "Light"),
+        (ThemeChoice.Dark, "Dark"),
+        (ThemeChoice.Device, "Device"),
+    ];
+
+    private VersionInfo? _version;
+    private ThemeChoice _theme;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _theme = await Themes.GetAsync();
+        _version = await Versions.GetAsync();
+    }
+
+    private async Task ChooseAsync(ThemeChoice choice)
+    {
+        _theme = choice;
+        await Themes.SetAsync(choice);
+    }
+}

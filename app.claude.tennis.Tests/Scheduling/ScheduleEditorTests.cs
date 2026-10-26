@@ -507,4 +507,24 @@ public class ScheduleEditorTests
             Assert.That(cleared.Rounds[1].Pinned, Is.EqualTo(Ids(0)));
         }
     }
+
+    [Test]
+    public void OptionsFor_PlayerInGame_OffersRemoveFromSchedule() =>
+        Assert.That(ScheduleEditor.OptionsFor(Eight(), new PlayerSpot(1, Id(0))).CanRemove, Is.True);
+
+    [Test]
+    public void OptionsFor_PinnedPlayer_OffersRemoveFromSchedule()
+    {
+        var pinned = ScheduleEditor.Pin(Eight(), new PlayerSpot(1, Id(0))).Schedule;
+
+        Assert.That(ScheduleEditor.OptionsFor(pinned, new PlayerSpot(1, Id(0))).CanRemove, Is.True);
+    }
+
+    [Test]
+    public void OptionsFor_PlayerSittingOut_OffersRemoveFromSchedule() =>
+        Assert.That(ScheduleEditor.OptionsFor(SixOnOneCourt(), new PlayerSpot(0, Id(4))).CanRemove, Is.True);
+
+    [Test]
+    public void OptionsFor_PlayerInCompletedRound_DoesNotOfferRemove() =>
+        Assert.That(ScheduleEditor.OptionsFor(Eight(firstRoundComplete: true), new PlayerSpot(0, Id(0))).CanRemove, Is.False);
 }

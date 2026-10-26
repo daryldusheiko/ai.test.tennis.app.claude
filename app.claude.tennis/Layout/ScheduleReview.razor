@@ -1,5 +1,7 @@
+@inject PlayerService PlayerStore
+
 <div class="page-section">
-    @if (Schedule.Step != ScheduleStep.InPlay && !_editing)
+    @if (Schedule.Step != ScheduleStep.InPlay && !IsEditing)
     {
         <a class="back-link" href="schedule" @onclick="OnBack" @onclick:preventDefault>‹ Players</a>
     }
@@ -11,7 +13,7 @@
         <p class="notice">With @Schedule.Players.Count players only @Schedule.Rounds.Count rounds are possible without anyone partnering the same player twice.</p>
     }
 
-    @if (_editing)
+    @if (IsEditing)
     {
         <div class="notice edit-banner" role="status">
             @if (_swap is { } swap)
@@ -31,16 +33,21 @@
         </div>
     }
 
-    <ScheduleCards Schedule="Schedule" ShowRank="true" Editable="true" Reorderable="!_editing" Editing="_editing" ShowMarks="true"
+    @if (IsEditing && _all is not null)
+    {
+        <PlayerPicker Label="Add a player to the schedule" InputId="add-to-schedule" All="_all" Excluded="ActiveIds" OnAdd="AddPlayerAsync" />
+    }
+
+    <ScheduleCards Schedule="Schedule" ShowRank="true" Editable="true" Reorderable="!IsEditing" Editing="IsEditing" ShowMarks="true"
                    Swap="_swap" OnPlayerHold="HoldAsync" OnPlayerTap="TapAsync" OnMoveRound="OnMoveRound" OnMoveGame="OnMoveGame" />
 
     <div class="form-buttons">
-        @if (_editing)
+        @if (IsEditing)
         {
             <button type="button" class="button" disabled="@_rescheduling" @onclick="RescheduleAsync">@(_rescheduling ? "Re-scheduling…" : "Re-schedule")</button>
         }
 
-        <button type="button" class="button" @onclick="ToggleEditAsync">@(_editing ? "Done" : "Edit")</button>
+        <button type="button" class="button" @onclick="ToggleEditAsync">@(IsEditing ? "Done" : "Edit")</button>
         <button type="button" class="button primary" @onclick="PlayAsync">Play</button>
     </div>
 </div>
@@ -64,8 +71,19 @@
             <button type="button" class="button" @onclick="StartSwap">Swap</button>
         }
 
+        @if (options.CanRemove)
+        {
+            <button type="button" class="button" @onclick="AskRemove">Remove from schedule</button>
+        }
+
         <button type="button" class="button" @onclick="CloseOptions">@(options.HasOptions ? "Cancel" : "Close")</button>
     </ChoiceDialog>
+}
+
+@if (_removing is { } leaving)
+{
+    <ConfirmDialog Title="@($"Remove {NameOf(leaving.Player, full: true)}?")" Message="@ScheduleRoster.RemovalMessage(Schedule)" ConfirmText="Remove"
+                   OnConfirm="RemoveAsync" OnCancel="() => _removing = null" />
 }
 
 @if (_queue.Count > 0)
@@ -83,8 +101,9 @@
 }
 
 @code {
-    private bool _editing;
+    private IReadOnlyList<Player>? _all;
     private bool _rescheduling;
+    private PlayerSpot? _removing;
     private string _message = string.Empty;
     private PlayerSpot? _swap;
     private PlayerSpot? _options;
@@ -92,6 +111,12 @@
 
     [Parameter, EditorRequired]
     public Schedule Schedule { get; set; } = null!;
+
+    private bool IsEditing => Schedule.IsEditing;
+
+    private IReadOnlySet<Guid> ActiveIds => ScheduleRoster.ActivePlayers(Schedule).Select(player => player.Id).ToHashSet();
+
+    protected override async Task OnInitializedAsync() => _all = await PlayerStore.GetAllAsync();
 
     [Parameter]
     public EventCallback OnBack { get; set; }
@@ -116,7 +141,7 @@
 
     private Task HoldAsync(PlayerSpot spot)
     {
-        if (_editing && _swap is null)
+        if (IsEditing && _swap is null)
         {
             _options = spot;
             StateHasChanged();
@@ -139,6 +164,21 @@
             _swap = null;
             await OnChanged.InvokeAsync(result.Schedule);
         }
+    }
+
+    private void AskRemove() => _removing = TakeOptions();
+
+    private async Task RemoveAsync()
+    {
+        var spot = _removing ?? throw new InvalidOperationException("No player is selected.");
+        _removing = null;
+        await ApplyAsync(ScheduleRoster.Remove(Schedule, spot.Player, Random.Shared.Next()));
+    }
+
+    private async Task AddPlayerAsync(Player player)
+    {
+        var added = new SchedulePlayer(player.Id, player.FirstName, player.LastName, player.Rank);
+        await ApplyAsync(ScheduleRoster.Add(Schedule, added, Random.Shared.Next()));
     }
 
     private async Task PinAsync() => await ApplyAsync(ScheduleEditor.Pin(Schedule, TakeOptions()));
@@ -206,19 +246,11 @@
     {
         _swap = null;
         _options = null;
+        _removing = null;
         _queue = [];
         _message = string.Empty;
-        if (_editing)
-        {
-            await OnChanged.InvokeAsync(ScheduleEditor.ClearChanged(Schedule));
-        }
-
-        _editing = !_editing;
+        await OnChanged.InvokeAsync(ScheduleFlow.WithEditing(Schedule, !IsEditing));
     }
 
-    private async Task PlayAsync()
-    {
-        _editing = false;
-        await OnPlay.InvokeAsync();
-    }
+    private Task PlayAsync() => OnPlay.InvokeAsync();
 }

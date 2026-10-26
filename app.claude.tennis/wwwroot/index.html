@@ -11,6 +11,17 @@
     <meta name="apple-mobile-web-app-title" content="Tennis" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Social Tennis</title>
+    <script>
+        // Applies the chosen theme before the page is drawn, so the wrong one never flashes.
+        try {
+            var theme = localStorage.getItem('socialTennis.theme');
+            if (theme === 'light' || theme === 'dark') {
+                document.documentElement.setAttribute('data-theme', theme);
+            }
+        } catch (error) {
+            // Storage can be blocked; the app then follows the phone's setting.
+        }
+    </script>
     <base href="/" />
     <link rel="preload" id="webassembly" />
     <link rel="manifest" href="manifest.webmanifest" />

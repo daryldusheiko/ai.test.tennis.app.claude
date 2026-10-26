@@ -1,0 +1,72 @@
+<label class="field-label" for="@InputId">@Label</label>
+<div class="search-row">
+    <input id="@InputId" type="search" class="field" placeholder="Type a name" autocomplete="off" autocapitalize="off" spellcheck="false"
+           value="@_search" @oninput="OnSearchChanged" disabled="@Disabled" />
+    <button type="button" class="button primary" disabled="@(_selected is null || Disabled)" @onclick="AddAsync">Add</button>
+</div>
+
+@if (Suggestions.Count > 0)
+{
+    <ul class="suggestions" aria-label="Matching players">
+        @foreach (var player in Suggestions)
+        {
+            <li>
+                <button type="button" class="suggestion" aria-pressed="@(player.Id == _selected ? "true" : "false")" @onclick="() => _selected = player.Id">@player.FullName</button>
+            </li>
+        }
+    </ul>
+}
+else if (!string.IsNullOrWhiteSpace(_search))
+{
+    <p class="page-message">No matching players.</p>
+}
+
+@code {
+    private string _search = string.Empty;
+    private Guid? _selected;
+
+    /// <summary>The visible label; it is also the name of the search box.</summary>
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public string InputId { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<Player> All { get; set; } = [];
+
+    /// <summary>Players already added, who are not suggested.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlySet<Guid> Excluded { get; set; } = new HashSet<Guid>();
+
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    [Parameter]
+    public EventCallback<Player> OnAdd { get; set; }
+
+    // Suggestions start from the first letter typed and narrow as more are typed.
+    private IReadOnlyList<Player> Suggestions => PlayerList.Suggest(All, _search, Excluded, ScheduleFlow.SearchSuggestionLimit);
+
+    private void OnSearchChanged(ChangeEventArgs e)
+    {
+        _search = e.Value?.ToString() ?? string.Empty;
+        if (_selected is { } selected && Suggestions.All(player => player.Id != selected))
+        {
+            _selected = null;
+        }
+    }
+
+    private async Task AddAsync()
+    {
+        var player = All.FirstOrDefault(candidate => candidate.Id == _selected);
+        if (player is null)
+        {
+            return;
+        }
+
+        _search = string.Empty;
+        _selected = null;
+        await OnAdd.InvokeAsync(player);
+    }
+}

@@ -100,7 +100,7 @@ public class PwaTests : AppTestBase
             await Page.ReloadAsync();
             await WaitForAppAsync();
 
-            await Assertions.Expect(Page.GetByRole(AriaRole.Heading, new() { Level = 1 })).ToHaveTextAsync("Play");
+            await Assertions.Expect(Page.GetByRole(AriaRole.Heading, new() { Level = 1 })).ToHaveTextAsync("Players");
             await Page.GetByRole(AriaRole.Navigation, new() { Name = "Main" }).GetByRole(AriaRole.Link, new() { Name = "About", Exact = true }).ClickAsync();
             await Assertions.Expect(Page.GetByRole(AriaRole.Heading, new() { Level = 1 })).ToHaveTextAsync("About");
         }

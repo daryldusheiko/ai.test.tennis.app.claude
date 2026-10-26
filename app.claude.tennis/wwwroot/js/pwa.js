@@ -22,4 +22,20 @@ window.socialTennis = {
     scrollToTop() {
         document.querySelector('.app-content')?.scrollTo(0, 0);
     },
+
+    // 'light' and 'dark' override the phone's setting; anything else follows it. index.html applies the stored choice before the page is drawn.
+    applyTheme(choice) {
+        if (choice === 'light' || choice === 'dark') {
+            document.documentElement.setAttribute('data-theme', choice);
+        } else {
+            document.documentElement.removeAttribute('data-theme');
+        }
+    },
+
+    // Keeps the squiggle layer behind a text box scrolled with it.
+    linkScroll(textArea, mirror) {
+        textArea.addEventListener('scroll', () => {
+            mirror.scrollTop = textArea.scrollTop;
+        });
+    },
 };

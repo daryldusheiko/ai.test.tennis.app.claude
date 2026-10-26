@@ -74,6 +74,17 @@ public class ScheduleTests : AppTestBase
         await Assertions.Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Review schedule" })).ToBeVisibleAsync(new() { Timeout = 60_000 });
     }
 
+    /// <summary>A new schedule opens in edit mode; most review tests need it off, as after tapping Done.</summary>
+    private async Task LeaveEditModeAsync(IPage? page = null)
+    {
+        page ??= Page;
+        await page.GetByRole(AriaRole.Button, new() { Name = "Done", Exact = true }).ClickAsync();
+        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = true })).ToBeVisibleAsync();
+
+        // The page is shorter without the banner, so go back to the top where the drags start.
+        await page.Locator(".app-content").EvaluateAsync("element => element.scrollTo(0, 0)");
+    }
+
     private async Task<string[]> FirstGamePerRoundAsync(IPage? page = null)
     {
         page ??= Page;
@@ -293,7 +304,7 @@ public class ScheduleTests : AppTestBase
         await Assertions.Expect(Rounds.First.Locator(".game-row").First.Locator(".team").First.Locator(".player-label")).ToHaveCountAsync(2);
         await Assertions.Expect(Page.GetByText("Court 4")).ToHaveCountAsync(0);
         await Assertions.Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Play", Exact = true })).ToBeVisibleAsync();
-        await Assertions.Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = true })).ToBeEnabledAsync();
+        await Assertions.Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Done", Exact = true })).ToBeEnabledAsync();
     }
 
     [Test]
@@ -330,6 +341,7 @@ public class ScheduleTests : AppTestBase
     public async Task Review_DragRoundHandle_ReordersTheRounds()
     {
         await CreateReviewedScheduleAsync(8, "4,5");
+        await LeaveEditModeAsync();
         var before = await FirstGamePerRoundAsync();
 
         await DragAsync(Page, Page.GetByRole(AriaRole.Button, new() { Name = "Move round 1" }), Rounds.Nth(2).Locator("h3"));
@@ -343,6 +355,7 @@ public class ScheduleTests : AppTestBase
     public async Task Review_DragGameHandle_ReordersGamesWithinTheRound()
     {
         await CreateReviewedScheduleAsync(8, "4,5");
+        await LeaveEditModeAsync();
         var rows = Rounds.Nth(1).Locator(".game-row");
         var first = await rows.Nth(0).InnerTextAsync();
         var second = await rows.Nth(1).InnerTextAsync();
@@ -357,6 +370,7 @@ public class ScheduleTests : AppTestBase
     public async Task Review_ReorderedThenReopened_KeepsTheNewOrder()
     {
         await CreateReviewedScheduleAsync(8, "4,5");
+        await LeaveEditModeAsync();
         var before = await FirstGamePerRoundAsync();
         await DragAsync(Page, Page.GetByRole(AriaRole.Button, new() { Name = "Move round 1" }), Rounds.Nth(1).Locator("h3"));
         await EventuallyAsync(async () => Assert.That((await FirstGamePerRoundAsync())[0], Is.EqualTo(before[1])));
@@ -373,6 +387,7 @@ public class ScheduleTests : AppTestBase
     public async Task Review_PlayersLink_ReturnsToThePlayersStepWithTheList()
     {
         await CreateReviewedScheduleAsync(5, "4,5");
+        await LeaveEditModeAsync();
 
         await Page.GetByRole(AriaRole.Link, new() { Name = "‹ Players" }).ClickAsync();
 
@@ -407,6 +422,7 @@ public class ScheduleTests : AppTestBase
     public async Task Play_ReorderedBeforePlaying_ShowsTheNewOrderWithCourtsInGameOrder()
     {
         await CreateReviewedScheduleAsync(8, "4,5");
+        await LeaveEditModeAsync();
         var rows = Rounds.Nth(0).Locator(".game-row");
         var second = await rows.Nth(1).Locator(".team").AllInnerTextsAsync();
         await DragAsync(Page, Page.GetByRole(AriaRole.Button, new() { Name = "Move game 2 of round 1" }), rows.Nth(0));
@@ -422,7 +438,8 @@ public class ScheduleTests : AppTestBase
     [Test]
     public async Task Play_NoSchedule_SaysToCreateOne()
     {
-        await Page.GotoAsync(RootUrl());
+        await Page.GotoAsync(RootUrl("about"));
+        await Page.GetByRole(AriaRole.Navigation, new() { Name = "Main" }).GetByRole(AriaRole.Link, new() { Name = "Play", Exact = true }).ClickAsync();
 
         await Assertions.Expect(Page.GetByText("No schedule in play.")).ToBeVisibleAsync();
         await Assertions.Expect(Page.GetByText("Create one on the Schedule page.")).ToBeVisibleAsync();
@@ -433,23 +450,119 @@ public class ScheduleTests : AppTestBase
     {
         await CreateReviewedScheduleAsync(5, "4,5");
 
-        await Page.GotoAsync(RootUrl());
+        await Page.GetByRole(AriaRole.Navigation, new() { Name = "Main" }).GetByRole(AriaRole.Link, new() { Name = "Play", Exact = true }).ClickAsync();
 
         await Assertions.Expect(Page.GetByText("No schedule in play.")).ToBeVisibleAsync();
         await Assertions.Expect(Page.GetByText("Finish setting it up on the Schedule page, then tap Play.")).ToBeVisibleAsync();
     }
 
     [Test]
-    public async Task Play_EditButton_OpensTheReviewPageWithoutAPlayersLink()
+    public async Task Review_ScheduleInPlay_HasNoPlayersLinkAndIsNotInEditMode()
     {
         await CreateReviewedScheduleAsync(8, "4,5");
         await Page.GetByRole(AriaRole.Button, new() { Name = "Play", Exact = true }).ClickAsync();
 
-        await Page.GetByRole(AriaRole.Link, new() { Name = "Edit", Exact = true }).ClickAsync();
+        await Page.GetByRole(AriaRole.Navigation, new() { Name = "Main" }).GetByRole(AriaRole.Link, new() { Name = "Schedule", Exact = true }).ClickAsync();
 
-        await Assertions.Expect(Header).ToHaveTextAsync("Schedule");
         await Assertions.Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Review schedule" })).ToBeVisibleAsync();
         await Assertions.Expect(Page.GetByRole(AriaRole.Link, new() { Name = "‹ Players" })).ToHaveCountAsync(0);
+        await Assertions.Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = true })).ToBeVisibleAsync();
+    }
+
+    [Test]
+    public async Task Review_NewSchedule_OpensInEditModeWithNoDragHandlesOrPlayersLink()
+    {
+        await CreateReviewedScheduleAsync(8, "4,5");
+
+        await Assertions.Expect(Page.GetByText("Press and hold a name to pin or swap a player.")).ToBeVisibleAsync();
+        await Assertions.Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Done", Exact = true })).ToBeVisibleAsync();
+        await Assertions.Expect(Page.Locator(".drag-handle")).ToHaveCountAsync(0);
+        await Assertions.Expect(Page.GetByRole(AriaRole.Link, new() { Name = "‹ Players" })).ToHaveCountAsync(0);
+    }
+
+    [Test]
+    public async Task Review_NewSchedule_StaysInEditModeWhenTheAppIsClosedAndReopened()
+    {
+        await CreateReviewedScheduleAsync(8, "4,5");
+
+        await Page.CloseAsync();
+        var reopened = await Context.NewPageAsync();
+        await OpenScheduleAsync(reopened);
+
+        await Assertions.Expect(reopened.GetByRole(AriaRole.Button, new() { Name = "Done", Exact = true })).ToBeVisibleAsync();
+        await Assertions.Expect(reopened.GetByText("Press and hold a name to pin or swap a player.")).ToBeVisibleAsync();
+    }
+
+    [Test]
+    public async Task Review_DoneTapped_LeavesEditModeForGoodEvenAfterReopening()
+    {
+        await CreateReviewedScheduleAsync(8, "4,5");
+        await LeaveEditModeAsync();
+
+        await Page.CloseAsync();
+        var reopened = await Context.NewPageAsync();
+        await OpenScheduleAsync(reopened);
+
+        await Assertions.Expect(reopened.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = true })).ToBeVisibleAsync();
+        await Assertions.Expect(reopened.Locator(".drag-handle").First).ToBeVisibleAsync();
+    }
+
+    [Test]
+    public async Task Review_PlayTapped_LeavesEditMode()
+    {
+        await CreateReviewedScheduleAsync(8, "4,5");
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Play", Exact = true }).ClickAsync();
+        await Assertions.Expect(Header).ToHaveTextAsync("Play");
+
+        await Page.GetByRole(AriaRole.Navigation, new() { Name = "Main" }).GetByRole(AriaRole.Link, new() { Name = "Schedule", Exact = true }).ClickAsync();
+
+        await Assertions.Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = true })).ToBeVisibleAsync();
+        await Assertions.Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Done", Exact = true })).ToHaveCountAsync(0);
+    }
+
+    [Test]
+    public async Task Schedule_WhileOneExists_OffersNoWayToStartAnother()
+    {
+        await CreateReviewedScheduleAsync(8, "4,5");
+
+        await Assertions.Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Create schedule" })).ToHaveCountAsync(0);
+        await Assertions.Expect(Page.GetByRole(AriaRole.Button, new() { Name = "New schedule" })).ToHaveCountAsync(0);
+    }
+
+    [Test]
+    public async Task Review_RankDots_AreGreyGreenYellowAndRed()
+    {
+        await CreateReviewedScheduleAsync(8, "4,5");
+
+        async Task<string> ColourOf(string label)
+        {
+            return await Page.GetByRole(AriaRole.Img, new() { Name = label, Exact = true }).First.EvaluateAsync<string>("element => getComputedStyle(element).backgroundColor");
+        }
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(await ColourOf("No rank"), Is.EqualTo("rgb(154, 163, 160)"));
+            Assert.That(await ColourOf("Rank 1"), Is.EqualTo("rgb(46, 158, 79)"));
+            Assert.That(await ColourOf("Rank 2"), Is.EqualTo("rgb(242, 193, 0)"));
+            Assert.That(await ColourOf("Rank 3"), Is.EqualTo("rgb(214, 50, 42)"));
+        }
+    }
+
+    [Test]
+    public async Task Review_Names_AreLeftJustifiedWithinEachSide()
+    {
+        await CreateReviewedScheduleAsync(8, "4,5");
+
+        foreach (var team in await Rounds.First.Locator(".team").AllAsync())
+        {
+            var lefts = new List<double>();
+            foreach (var label in await team.Locator(".player-label").AllAsync())
+            {
+                lefts.Add((await label.BoundingBoxAsync())!.X);
+            }
+
+            Assert.That(lefts.Max() - lefts.Min(), Is.LessThan(1));
+        }
     }
 
     [Test]

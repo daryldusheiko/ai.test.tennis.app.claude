@@ -1,5 +1,7 @@
 @page "/"
 @inject ScheduleService Schedules
+@inject AppStart Start
+@inject NavigationManager Navigation
 
 <PageTitle>Social Tennis</PageTitle>
 
@@ -19,7 +21,7 @@ else
     <div class="page-section">
         <ScheduleCards Schedule="_schedule" ShowCourts="true" OnRoundAction="OpenRound" />
         <div class="form-buttons">
-            <a class="button" href="schedule">Edit</a>
+            <button type="button" class="button" @onclick="() => _confirmClose = true">Close schedule</button>
         </div>
     </div>
 }
@@ -32,15 +34,38 @@ else
                        OnCancelRound="() => ApplyAsync(RoundProgress.Cancel)" OnClose="CloseDialog" />
 }
 
+@if (_confirmClose)
+{
+    <ConfirmDialog Title="Close this schedule?" Message="The schedule and all its rounds will be deleted. Your players are kept. This can't be undone."
+                   ConfirmText="Close schedule" OnConfirm="CloseScheduleAsync" OnCancel="() => _confirmClose = false" />
+}
+
 @code {
     private bool _loading = true;
     private Schedule? _schedule;
     private int? _dialogRound;
+    private bool _confirmClose;
 
     protected override async Task OnInitializedAsync()
     {
         _schedule = await Schedules.GetAsync();
+
+        // Opening the app with nothing in play starts on Players; after that, Play stays on Play.
+        if (Start.TakePlayCheck() && _schedule is not { Step: ScheduleStep.InPlay })
+        {
+            Navigation.NavigateTo("players", replace: true);
+            return;
+        }
+
         _loading = false;
+    }
+
+    private async Task CloseScheduleAsync()
+    {
+        await Schedules.DeleteAsync();
+        _schedule = null;
+        _dialogRound = null;
+        _confirmClose = false;
     }
 
     private void OpenRound(int index) => _dialogRound = index;

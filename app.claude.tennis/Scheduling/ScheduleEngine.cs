@@ -15,6 +15,9 @@ public static class ScheduleEngine
 
     private static readonly (int OpponentLimit, bool AllowRankClash, int Attempts)[] Phases = [(2, false, 60), (3, false, 120), (3, true, 60)];
 
+    private static readonly (int OpponentLimit, bool AllowRankClash, bool AllowRepeatPartners, int Attempts)[] ContinuePhases =
+        [(2, false, false, 40), (3, false, false, 60), (3, true, false, 30), (int.MaxValue, true, true, 20)];
+
     private enum SpecialKind
     {
         None,
@@ -87,6 +90,65 @@ public static class ScheduleEngine
         return ToRounds(best ?? throw new InvalidOperationException("No schedule could be built."), players);
     }
 
+    /// <summary>
+    /// Builds the rounds that follow <paramref name="history"/> (the rounds already played), for the given players. Used when a player
+    /// joins or leaves part-way through: it carries on the same session, so nobody partners the same player twice if that is possible,
+    /// and sitting out, three-player games and singles stay shared out. Fewer rounds than asked for are returned only if the search fails.
+    /// </summary>
+    public static IReadOnlyList<Round> Continue(IReadOnlyList<SchedulePlayer> players, int courtCount, int roundCount, IReadOnlyList<Round> history, int seed)
+    {
+        ArgumentNullException.ThrowIfNull(players);
+        ArgumentNullException.ThrowIfNull(history);
+        if (players.Count < MinPlayers)
+        {
+            throw new ArgumentException($"A schedule needs at least {MinPlayers} players but got {players.Count}.", nameof(players));
+        }
+
+        if (courtCount < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(courtCount), courtCount, "At least one court is needed.");
+        }
+
+        var shape = Shape.For(players.Count, courtCount);
+        var ranks = players.Select(player => player.Rank).ToArray();
+        var canClash = shape.Kind == SpecialKind.Singles && ranks.Contains(1) && ranks.Contains(3);
+        var indexes = players.Select((player, index) => (player.Id, index)).ToDictionary(item => item.Id, item => item.index);
+        var random = new Random(seed);
+
+        Built? best = null;
+        foreach (var (opponentLimit, allowRankClash, allowRepeatPartners, attempts) in ContinuePhases)
+        {
+            if (allowRankClash && !canClash && !allowRepeatPartners)
+            {
+                continue;
+            }
+
+            for (var attempt = 0; attempt < attempts; attempt++)
+            {
+                var builder = new Builder(shape, courtCount, opponentLimit, allowRankClash && canClash, ranks, random, allowRepeatPartners);
+                builder.Replay(history, indexes);
+                var built = builder.Build(roundCount);
+                if (best is null || built.Rounds.Count > best.Rounds.Count
+                    || (built.Rounds.Count == best.Rounds.Count && built.RankClashes < best.RankClashes))
+                {
+                    best = built;
+                }
+
+                if (best.Rounds.Count == roundCount && best.RankClashes == 0)
+                {
+                    return ToRounds(best, players);
+                }
+            }
+
+            if (best?.Rounds.Count == roundCount)
+            {
+                return ToRounds(best, players);
+            }
+        }
+
+        return best is null ? [] : ToRounds(best, players);
+    }
+
     private static List<Round> ToRounds(Built built, IReadOnlyList<SchedulePlayer> players)
     {
         return
@@ -139,13 +201,14 @@ public static class ScheduleEngine
         private readonly int?[] _ranks;
         private readonly Random _random;
         private readonly int _count;
-        private readonly bool[,] _partners;
+        private readonly int[,] _partners;
+        private readonly bool _allowRepeatPartners;
         private readonly int[,] _opponents;
         private readonly int[] _specialCount;
         private readonly int[] _lonerCount;
         private int _nodes;
 
-        public Builder(Shape shape, int courtCount, int opponentLimit, bool allowRankClash, int?[] ranks, Random random)
+        public Builder(Shape shape, int courtCount, int opponentLimit, bool allowRankClash, int?[] ranks, Random random, bool allowRepeatPartners = false)
         {
             _shape = shape;
             _opponentLimit = opponentLimit;
@@ -153,7 +216,8 @@ public static class ScheduleEngine
             _ranks = ranks;
             _random = random;
             _count = ranks.Length;
-            _partners = new bool[_count, _count];
+            _allowRepeatPartners = allowRepeatPartners;
+            _partners = new int[_count, _count];
             _opponents = new int[_count, _count];
             _specialCount = new int[_count];
             _lonerCount = new int[_count];
@@ -283,10 +347,65 @@ public static class ScheduleEngine
         private bool IsValidThreePlayer(int loner, int[] chosen)
         {
             var pair = chosen.Where(index => index != loner).ToArray();
-            return !_partners[pair[0], pair[1]]
+            return !IsBlocked(pair[0], pair[1])
                 && _opponents[loner, pair[0]] < _opponentLimit
                 && _opponents[loner, pair[1]] < _opponentLimit;
         }
+
+        // Partners never repeat, except in the last-resort search used after players join or leave a schedule part-way through.
+        private bool IsBlocked(int a, int b) => !_allowRepeatPartners && _partners[a, b] > 0;
+
+        /// <summary>Counts rounds already played, so the rounds built next continue the same session.</summary>
+        public void Replay(IReadOnlyList<Round> history, IReadOnlyDictionary<Guid, int> indexes)
+        {
+            foreach (var round in history)
+            {
+                var playing = new HashSet<int>();
+                foreach (var game in round.Games)
+                {
+                    var side1 = Present(game.Team1, indexes);
+                    var side2 = Present(game.Team2, indexes);
+                    playing.UnionWith(side1);
+                    playing.UnionWith(side2);
+                    foreach (var side in new[] { side1, side2 })
+                    {
+                        if (side.Length == 2)
+                        {
+                            _partners[side[0], side[1]]++;
+                            _partners[side[1], side[0]]++;
+                        }
+                    }
+
+                    AddOpponents(side1, side2);
+                    var isSingles = game.Team1.Count == 1 && game.Team2.Count == 1;
+                    var isThreePlayer = game.Team1.Count + game.Team2.Count == 3;
+                    if ((isSingles && _shape.Kind == SpecialKind.Singles) || (isThreePlayer && _shape.Kind == SpecialKind.ThreePlayer))
+                    {
+                        foreach (var index in side1.Concat(side2))
+                        {
+                            _specialCount[index]++;
+                        }
+                    }
+
+                    if (isThreePlayer && _shape.Kind == SpecialKind.ThreePlayer && game.Team1.Count == 1 && side1.Length == 1)
+                    {
+                        _lonerCount[side1[0]]++;
+                    }
+                }
+
+                // A player who wasn't in the round (a late arrival) counts it as sitting out, so they get to play now.
+                if (_shape.Kind == SpecialKind.SitOut)
+                {
+                    foreach (var index in Enumerable.Range(0, _count).Where(index => !playing.Contains(index)))
+                    {
+                        _specialCount[index]++;
+                    }
+                }
+            }
+        }
+
+        private static int[] Present(IReadOnlyList<Guid> ids, IReadOnlyDictionary<Guid, int> indexes) =>
+            [.. ids.Where(indexes.ContainsKey).Select(id => indexes[id])];
 
         private bool IsRankClash(int a, int b) => (_ranks[a], _ranks[b]) is (1, 3) or (3, 1);
 
@@ -303,7 +422,7 @@ public static class ScheduleEngine
             }
 
             var p = remaining[0];
-            foreach (var q in Candidates(remaining.Skip(1), _ => 0).Where(q => !_partners[p, q]))
+            foreach (var q in Candidates(remaining.Skip(1), index => _partners[p, index] * 1000).Where(q => !IsBlocked(p, q)))
             {
                 var rest = remaining.Where(index => index != p && index != q).ToList();
                 foreach (var r in Candidates(rest, index => _opponents[p, index] + _opponents[q, index]))
@@ -315,7 +434,7 @@ public static class ScheduleEngine
 
                     foreach (var s in Candidates(rest.Where(index => index != r), index => _opponents[p, index] + _opponents[q, index]))
                     {
-                        if (_partners[r, s] || _opponents[p, s] >= _opponentLimit || _opponents[q, s] >= _opponentLimit)
+                        if (IsBlocked(r, s) || _opponents[p, s] >= _opponentLimit || _opponents[q, s] >= _opponentLimit)
                         {
                             continue;
                         }
@@ -362,8 +481,10 @@ public static class ScheduleEngine
 
         private void Apply(int p, int q, int r, int s, int delta)
         {
-            _partners[p, q] = _partners[q, p] = delta > 0;
-            _partners[r, s] = _partners[s, r] = delta > 0;
+            _partners[p, q] += delta;
+            _partners[q, p] += delta;
+            _partners[r, s] += delta;
+            _partners[s, r] += delta;
             foreach (var a in new[] { p, q })
             {
                 foreach (var b in new[] { r, s })
@@ -391,7 +512,8 @@ public static class ScheduleEngine
             {
                 var game = round.Games[^1];
                 _lonerCount[game.Team1[0]]++;
-                _partners[game.Team2[0], game.Team2[1]] = _partners[game.Team2[1], game.Team2[0]] = true;
+                _partners[game.Team2[0], game.Team2[1]]++;
+                _partners[game.Team2[1], game.Team2[0]]++;
                 AddOpponents(game.Team1, game.Team2);
             }
         }

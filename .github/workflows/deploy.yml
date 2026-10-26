@@ -23,8 +23,12 @@ jobs:
           dotnet-version: 10.0.x
       - name: Build and test (unit and browser tests)
         run: dotnet test -c Release
-      - name: Publish
-        run: scripts/publish.sh "$RUNNER_TEMP/out" "/${GITHUB_REPOSITORY#*/}/"
+      - name: Publish (stamped with this deploy's version)
+        run: |
+          export APP_VERSION="1.0.${GITHUB_RUN_NUMBER}"
+          export APP_COMMIT="${GITHUB_SHA::7}"
+          export APP_RELEASED="$(date -u +%F)"
+          scripts/publish.sh "$RUNNER_TEMP/out" "/${GITHUB_REPOSITORY#*/}/"
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ${{ runner.temp }}/out/site

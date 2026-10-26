@@ -27,7 +27,7 @@ public static class ScheduleFlow
     public static Schedule BackToPlayers(Schedule schedule)
     {
         ArgumentNullException.ThrowIfNull(schedule);
-        return schedule with { Step = ScheduleStep.Players, Rounds = [], AcceptedPairs = [] };
+        return schedule with { Step = ScheduleStep.Players, Rounds = [], AcceptedPairs = [], IsEditing = false };
     }
 
     /// <summary>Builds the rounds. Names and ranks are taken from the current player list so late edits are used.</summary>
@@ -42,13 +42,20 @@ public static class ScheduleFlow
                 : chosen)
             .ToList();
         var rounds = ScheduleEngine.Generate(players, schedule.Courts.Count, seed);
-        return schedule with { Players = players, Rounds = rounds, Seed = seed, Step = ScheduleStep.Review, AcceptedPairs = [] };
+        return schedule with { Players = players, Rounds = rounds, Seed = seed, Step = ScheduleStep.Review, AcceptedPairs = [], IsEditing = true };
     }
 
     public static Schedule Play(Schedule schedule)
     {
         ArgumentNullException.ThrowIfNull(schedule);
-        return ScheduleEditor.ClearChanged(schedule) with { Step = ScheduleStep.InPlay };
+        return ScheduleEditor.ClearChanged(schedule) with { Step = ScheduleStep.InPlay, IsEditing = false };
+    }
+
+    /// <summary>Turns edit mode on, or off (which also clears the blue markers).</summary>
+    public static Schedule WithEditing(Schedule schedule, bool editing)
+    {
+        ArgumentNullException.ThrowIfNull(schedule);
+        return (editing ? schedule : ScheduleEditor.ClearChanged(schedule)) with { IsEditing = editing };
     }
 
     /// <summary>Moves a round to a new position. Completed rounds can't move, and nothing can move onto one.</summary>

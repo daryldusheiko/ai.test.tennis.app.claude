@@ -16,28 +16,7 @@
     }
     else
     {
-        <label class="field-label" for="add-players">Add players</label>
-        <div class="search-row">
-            <input id="add-players" type="search" class="field" placeholder="Type a name" autocomplete="off" autocapitalize="off" spellcheck="false"
-                   value="@_search" @oninput="OnSearchChanged" disabled="@_generating" />
-            <button type="button" class="button primary" disabled="@(_selected is null || _generating)" @onclick="AddAsync">Add</button>
-        </div>
-
-        @if (Suggestions.Count > 0)
-        {
-            <ul class="suggestions" aria-label="Matching players">
-                @foreach (var player in Suggestions)
-                {
-                    <li>
-                        <button type="button" class="suggestion" aria-pressed="@(player.Id == _selected ? "true" : "false")" @onclick="() => _selected = player.Id">@player.FullName</button>
-                    </li>
-                }
-            </ul>
-        }
-        else if (!string.IsNullOrWhiteSpace(_search))
-        {
-            <p class="page-message">No matching players.</p>
-        }
+        <PlayerPicker Label="Add players" InputId="add-players" All="_all" Excluded="ChosenIds" Disabled="_generating" OnAdd="AddAsync" />
 
         <h3>Playing (@_chosen.Count)</h3>
         @if (_chosen.Count == 0)
@@ -77,8 +56,6 @@
 @code {
     private IReadOnlyList<Player>? _all;
     private List<SchedulePlayer> _chosen = [];
-    private string _search = string.Empty;
-    private Guid? _selected;
     private bool _generating;
 
     [Parameter, EditorRequired]
@@ -94,8 +71,7 @@
     [Parameter]
     public EventCallback<IReadOnlyList<SchedulePlayer>> OnNext { get; set; }
 
-    private IReadOnlyList<Player> Suggestions =>
-        PlayerList.Suggest(_all ?? [], _search, _chosen.Select(player => player.Id).ToHashSet(), ScheduleFlow.SearchSuggestionLimit);
+    private IReadOnlySet<Guid> ChosenIds => _chosen.Select(player => player.Id).ToHashSet();
 
     protected override async Task OnInitializedAsync()
     {
@@ -103,26 +79,14 @@
         _all = await PlayerStore.GetAllAsync();
     }
 
-    private void OnSearchChanged(ChangeEventArgs e)
+    private async Task AddAsync(Player player)
     {
-        _search = e.Value?.ToString() ?? string.Empty;
-        if (_selected is { } selected && Suggestions.All(player => player.Id != selected))
-        {
-            _selected = null;
-        }
-    }
-
-    private async Task AddAsync()
-    {
-        var player = _all?.FirstOrDefault(candidate => candidate.Id == _selected);
-        if (player is null || _chosen.Any(existing => existing.Id == player.Id))
+        if (_chosen.Any(existing => existing.Id == player.Id))
         {
             return;
         }
 
         _chosen.Add(new SchedulePlayer(player.Id, player.FirstName, player.LastName, player.Rank));
-        _search = string.Empty;
-        _selected = null;
         await OnChanged.InvokeAsync(_chosen);
     }
 

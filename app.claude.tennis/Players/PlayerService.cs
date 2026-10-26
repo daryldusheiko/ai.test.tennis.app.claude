@@ -52,6 +52,20 @@ public sealed class PlayerService(IKeyValueStorage storage)
         await WriteAsync(players);
     }
 
+    /// <summary>Adds players to the list, skipping any already there, and says how many were added and skipped.</summary>
+    public async Task<MergeResult> AddRangeAsync(IEnumerable<Player> incoming)
+    {
+        ArgumentNullException.ThrowIfNull(incoming);
+
+        var merged = PlayerMerge.Merge(await GetAllAsync(), incoming);
+        if (merged.Added > 0)
+        {
+            await WriteAsync([.. merged.Players]);
+        }
+
+        return merged;
+    }
+
     public async Task DeleteAsync(Guid id)
     {
         var players = (await GetAllAsync()).Where(player => player.Id != id).ToList();

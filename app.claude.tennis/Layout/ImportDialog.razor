@@ -1,0 +1,117 @@
+@using Microsoft.JSInterop
+@inject IJSRuntime Js
+
+<div class="dialog-backdrop">
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="import-title" aria-describedby="import-help">
+        <h2 id="import-title">Import players</h2>
+        <p id="import-help">One player per line: first name, last name and an optional rank (1–3), separated by commas.</p>
+
+        <div class="import-field">
+            <div class="import-mirror" aria-hidden="true" @ref="_mirror">
+                @foreach (var (segment, bad) in Segments())
+                {
+                    if (bad)
+                    {
+                        <mark class="squiggle">@segment</mark>
+                    }
+                    else
+                    {
+                        @segment
+                    }
+                }
+            </div>
+            <textarea class="import-text" aria-label="Players to import" rows="4" spellcheck="false" autocomplete="off" autocapitalize="off"
+                      placeholder="@Placeholder" value="@_text" @oninput="OnInput" @ref="_textArea"></textarea>
+        </div>
+
+        @if (_result.Errors.Count > 0)
+        {
+            <ul class="errors" aria-live="polite">
+                @foreach (var error in _result.Errors.Take(MaxErrorsShown))
+                {
+                    <li>@error.Message</li>
+                }
+
+                @if (_result.Errors.Count > MaxErrorsShown)
+                {
+                    <li>…and @(_result.Errors.Count - MaxErrorsShown) more.</li>
+                }
+            </ul>
+        }
+        else if (_result.Players.Count > 0)
+        {
+            <p class="import-ready" role="status">@PlayerMessages.ReadyToImport(_result.Players.Count)</p>
+        }
+
+        <div class="dialog-buttons">
+            <button type="button" class="button" @onclick="OnCancel">Cancel</button>
+            <button type="button" class="button primary" disabled="@(!_result.CanSave)" @onclick="() => OnSave.InvokeAsync(_result)">Save</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private const int MaxErrorsShown = 5;
+
+    // A newline in the attribute value is a line break in the placeholder.
+    private const string Placeholder = "One player per line, e.g.\nDaryl, Smith\n\"Mary Ann\", \"Jones\"\nSam, Lee, 2\n\"Jo\", \"De Silva\", \"3\"";
+
+    private string _text = string.Empty;
+    private ImportResult _result = PlayerImport.Parse(string.Empty);
+    private ElementReference _mirror;
+    private ElementReference _textArea;
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    [Parameter]
+    public EventCallback<ImportResult> OnSave { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Js.InvokeVoidAsync("socialTennis.linkScroll", _textArea, _mirror);
+        }
+    }
+
+    private void OnInput(ChangeEventArgs e)
+    {
+        _text = e.Value?.ToString() ?? string.Empty;
+        _result = PlayerImport.Parse(_text);
+    }
+
+    // The mirror repeats the text behind the text box with the offending parts marked, which draws the red squiggles.
+    private IEnumerable<(string Text, bool Bad)> Segments()
+    {
+        var lines = _text.Replace("\r", string.Empty, StringComparison.Ordinal).Split('\n');
+        for (var index = 0; index < lines.Length; index++)
+        {
+            var line = lines[index];
+            var bad = new bool[line.Length];
+            foreach (var error in _result.Errors.Where(error => error.Line == index + 1))
+            {
+                for (var position = error.Start; position < Math.Min(line.Length, error.Start + error.Length); position++)
+                {
+                    bad[position] = true;
+                }
+            }
+
+            var start = 0;
+            while (start < line.Length)
+            {
+                var end = start;
+                while (end < line.Length && bad[end] == bad[start])
+                {
+                    end++;
+                }
+
+                yield return (line[start..end], bad[start]);
+                start = end;
+            }
+
+            // The end of line is kept so the mirror wraps exactly like the text box.
+            yield return (index < lines.Length - 1 ? "\n" : "​", false);
+        }
+    }
+}

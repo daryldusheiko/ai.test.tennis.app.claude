@@ -49,11 +49,11 @@ public class NavigationTests : AppTestBase
     }
 
     [Test]
-    public async Task Header_OnOpen_ShowsPlay()
+    public async Task Header_OnOpenWithNothingInPlay_ShowsPlayers()
     {
         await Page.GotoAsync(RootUrl());
 
-        await Assertions.Expect(Header).ToHaveTextAsync("Play");
+        await Assertions.Expect(Header).ToHaveTextAsync("Players");
     }
 
     [TestCase("Players")]

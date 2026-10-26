@@ -22,9 +22,9 @@ public static class ScheduleEditor
         {
             (true, _, _, _) => new PlayerOptions($"Round {number} is complete, so nothing in it can be changed.", false, false, false),
             (_, true, _, _) => new PlayerOptions("This game is complete, so it can't be changed.", false, false, false),
-            (_, _, true, _) => new PlayerOptions("Pinned in this game: re-scheduling won't move them and they can't be swapped.", false, true, false),
-            (_, _, _, true) => new PlayerOptions($"Sitting out in round {number}.", false, false, true),
-            _ => new PlayerOptions($"Round {number}.", true, false, true),
+            (_, _, true, _) => new PlayerOptions("Pinned in this game: re-scheduling won't move them and they can't be swapped.", false, true, false, true),
+            (_, _, _, true) => new PlayerOptions($"Sitting out in round {number}.", false, false, true, true),
+            _ => new PlayerOptions($"Round {number}.", true, false, true, true),
         };
     }
 
@@ -282,7 +282,7 @@ public static class ScheduleEditor
     }
 
     // Short names end in an initial ("Ann T."), so a full stop is only added when there isn't one already.
-    private static string Sentence(string text) => text.EndsWith('.') ? text : text + ".";
+    internal static string Sentence(string text) => text.EndsWith('.') ? text : text + ".";
 
     private static bool IsBetter(Score score, int undo, Score other, int otherUndo) =>
         score.Conflicts != other.Conflicts ? score.Conflicts < other.Conflicts
@@ -397,7 +397,7 @@ public static class ScheduleEditor
 
     private static IEnumerable<Guid> Everyone(Round round) => round.Games.SelectMany(game => game.Team1.Concat(game.Team2)).Concat(round.SittingOut);
 
-    private static Place? Locate(Round round, Guid id)
+    internal static Place? Locate(Round round, Guid id)
     {
         for (var game = 0; game < round.Games.Count; game++)
         {
@@ -418,7 +418,7 @@ public static class ScheduleEditor
         return sitting >= 0 ? new Place(-1, 0, sitting) : null;
     }
 
-    private static Round SwapPlayers(Round round, Guid a, Guid b)
+    internal static Round SwapPlayers(Round round, Guid a, Guid b)
     {
         Guid Replace(Guid id)
         {
@@ -446,7 +446,7 @@ public static class ScheduleEditor
         return schedule with { Rounds = rounds };
     }
 
-    private readonly record struct Place(int Game, int Team, int Index)
+    internal readonly record struct Place(int Game, int Team, int Index)
     {
         public bool IsSittingOut => Game < 0;
     }

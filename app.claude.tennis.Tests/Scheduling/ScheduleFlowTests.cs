@@ -192,4 +192,57 @@ public class ScheduleFlowTests
 
         Assert.That(ScheduleFlow.MoveGame(generated, 9, 0, 1), Is.SameAs(generated));
     }
+
+    [Test]
+    public void Generate_NewSchedule_StartsInEditMode() =>
+        Assert.That(ScheduleFlow.Generate(WithEightPlayers(out _), [], 1).IsEditing, Is.True);
+
+    [Test]
+    public void Play_InEditMode_LeavesEditMode()
+    {
+        var generated = ScheduleFlow.Generate(WithEightPlayers(out _), [], 1);
+
+        Assert.That(ScheduleFlow.Play(generated).IsEditing, Is.False);
+    }
+
+    [Test]
+    public void WithEditing_Off_ClearsTheBlueMarkersToo()
+    {
+        var generated = ScheduleFlow.Generate(WithEightPlayers(out _), [], 1);
+        var game = generated.Rounds[0].Games[0];
+        var edited = ScheduleEditor.Swap(generated, new PlayerSpot(0, game.Team1[0]), new PlayerSpot(0, game.Team2[0])).Schedule;
+
+        var done = ScheduleFlow.WithEditing(edited, editing: false);
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(edited.Rounds[0].Changed, Is.Not.Empty);
+            Assert.That(done.IsEditing, Is.False);
+            Assert.That(done.Rounds[0].Changed, Is.Empty);
+        }
+    }
+
+    [Test]
+    public void WithEditing_On_KeepsTheBlueMarkers()
+    {
+        var generated = ScheduleFlow.WithEditing(ScheduleFlow.Generate(WithEightPlayers(out _), [], 1), editing: false);
+        var game = generated.Rounds[0].Games[0];
+        var edited = ScheduleEditor.Swap(generated, new PlayerSpot(0, game.Team1[0]), new PlayerSpot(0, game.Team2[0])).Schedule;
+
+        var again = ScheduleFlow.WithEditing(edited, editing: true);
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(again.IsEditing, Is.True);
+            Assert.That(again.Rounds[0].Changed, Is.Not.Empty);
+        }
+    }
+
+    [Test]
+    public void BackToPlayers_FromEditMode_LeavesEditMode()
+    {
+        var generated = ScheduleFlow.Generate(WithEightPlayers(out _), [], 1);
+
+        Assert.That(ScheduleFlow.BackToPlayers(generated).IsEditing, Is.False);
+    }
 }

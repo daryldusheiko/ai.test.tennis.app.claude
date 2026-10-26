@@ -11,4 +11,7 @@ public sealed record Schedule(
 {
     /// <summary>Pairs the user chose to keep together although they partner more than once.</summary>
     public IReadOnlyList<PlayerPair> AcceptedPairs { get; init; } = [];
+
+    /// <summary>Edit mode is on. Saved, because a new schedule stays in edit mode, even if the app is closed, until Done or Play.</summary>
+    public bool IsEditing { get; init; }
 }

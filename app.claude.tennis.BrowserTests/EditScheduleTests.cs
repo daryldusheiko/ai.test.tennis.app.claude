@@ -3,13 +3,15 @@ using Microsoft.Playwright;
 
 namespace SocialTennis.BrowserTests;
 
-public class EditScheduleTests : AppTestBase
+public partial class EditScheduleTests : AppTestBase
 {
     private static readonly string[] Names = ["Ann", "Bob", "Cat", "Dan", "Eve", "Fay", "Gus", "Hal"];
 
     private ILocator Dialog => Page.GetByRole(AriaRole.Alertdialog);
 
     private ILocator Banner => Page.Locator(".edit-banner");
+
+    private ILocator AddPicker => Page.GetByLabel("Add a player to the schedule");
 
     private static Guid PlayerId(int index) => new($"00000000-0000-0000-0000-{index + 1:D12}");
 
@@ -120,7 +122,7 @@ public class EditScheduleTests : AppTestBase
 
         await Assertions.Expect(Dialog.GetByRole(AriaRole.Heading, new() { Name = "Cat Test" })).ToBeVisibleAsync();
         await Assertions.Expect(Dialog.GetByText("Round 2.")).ToBeVisibleAsync();
-        await Assertions.Expect(Dialog.GetByRole(AriaRole.Button)).ToHaveTextAsync(["Pin", "Swap", "Cancel"]);
+        await Assertions.Expect(Dialog.GetByRole(AriaRole.Button)).ToHaveTextAsync(["Pin", "Swap", "Remove from schedule", "Cancel"]);
     }
 
     [Test]
@@ -160,7 +162,7 @@ public class EditScheduleTests : AppTestBase
         await Assertions.Expect(NameIn(2, "Cat").GetByRole(AriaRole.Img, new() { Name = "Pinned" })).ToBeVisibleAsync();
         await HoldAsync(NameIn(2, "Cat"));
         await Assertions.Expect(Dialog.GetByText("Pinned in this game: re-scheduling won't move them and they can't be swapped.")).ToBeVisibleAsync();
-        await Assertions.Expect(Dialog.GetByRole(AriaRole.Button)).ToHaveTextAsync(["Unpin", "Cancel"]);
+        await Assertions.Expect(Dialog.GetByRole(AriaRole.Button)).ToHaveTextAsync(["Unpin", "Remove from schedule", "Cancel"]);
     }
 
     [Test]
@@ -424,4 +426,266 @@ public class EditScheduleTests : AppTestBase
             await PublishedSite.Root.StartAsync();
         }
     }
+
+    /// <summary>Puts the eight scheduled players, plus some who are not in the schedule, into the player list, so there is someone to add.</summary>
+    private async Task StorePlayerListAsync(params string[] notInSchedule)
+    {
+        var players = Names.Select((name, index) => new { Id = PlayerId(index), FirstName = name, LastName = "Test", Rank = (int?)null, Comment = string.Empty })
+            .Concat(notInSchedule.Select(name => new { Id = Guid.NewGuid(), FirstName = name, LastName = "Test", Rank = (int?)null, Comment = string.Empty }));
+        await Page.EvaluateAsync("json => localStorage.setItem('socialTennis.players', json)", JsonSerializer.Serialize(players));
+        await Page.ReloadAsync();
+        await Assertions.Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Review schedule" })).ToBeVisibleAsync();
+    }
+
+    private ILocator Round(int number) => Page.Locator(".round-card").Nth(number - 1);
+
+    private async Task ChooseToAddAsync(string search, string fullName)
+    {
+        await AddPicker.FillAsync(search);
+        await Page.GetByLabel("Matching players").GetByRole(AriaRole.Button, new() { Name = fullName }).ClickAsync();
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Add", Exact = true }).ClickAsync();
+    }
+
+    private async Task RemoveFromScheduleAsync(int round, string name)
+    {
+        await HoldAsync(NameIn(round, name));
+        await Dialog.GetByRole(AriaRole.Button, new() { Name = "Remove from schedule", Exact = true }).ClickAsync();
+    }
+
+    [Test]
+    public async Task AddPlayer_NotEditing_HasNoSearchBox()
+    {
+        await SeedScheduleAsync();
+        await StorePlayerListAsync("Ivy");
+
+        await Assertions.Expect(AddPicker).ToHaveCountAsync(0);
+    }
+
+    [Test]
+    public async Task AddPlayer_Editing_ShowsTheSearchBoxAboveTheRounds()
+    {
+        await SeedScheduleAsync();
+        await StorePlayerListAsync("Ivy");
+
+        await StartEditingAsync();
+
+        await Assertions.Expect(AddPicker).ToBeVisibleAsync();
+        await Assertions.Expect(AddPicker).ToHaveAttributeAsync("placeholder", "Type a name");
+        await Assertions.Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Add", Exact = true })).ToBeDisabledAsync();
+    }
+
+    [Test]
+    public async Task AddPlayer_TypingOneLetter_SuggestsOnlyPlayersNotAlreadyInTheSchedule()
+    {
+        await SeedScheduleAsync();
+        await StorePlayerListAsync("Ivy", "Zed");
+        await StartEditingAsync();
+
+        await AddPicker.FillAsync("i");
+
+        await Assertions.Expect(Page.GetByLabel("Matching players").GetByRole(AriaRole.Button)).ToHaveTextAsync(["Ivy Test"]);
+    }
+
+    [Test]
+    public async Task AddPlayer_PlayerAlreadyInTheSchedule_IsNotSuggested()
+    {
+        await SeedScheduleAsync();
+        await StorePlayerListAsync("Ivy");
+        await StartEditingAsync();
+
+        await AddPicker.FillAsync("Ann");
+
+        await Assertions.Expect(Page.GetByText("No matching players.")).ToBeVisibleAsync();
+    }
+
+    [Test]
+    public async Task AddPlayer_Added_PlaysInTheRoundsShownInBlueWithAMessage()
+    {
+        await SeedScheduleAsync();
+        await StorePlayerListAsync("Ivy");
+        await StartEditingAsync();
+
+        await ChooseToAddAsync("i", "Ivy Test");
+
+        await Assertions.Expect(Banner.GetByText(AddedIvy())).ToBeVisibleAsync();
+        var ivy = Page.Locator(".round-card .mark-changed").Filter(new() { HasText = "Ivy T." });
+        Assert.That(await ivy.CountAsync(), Is.GreaterThanOrEqualTo(2), "nine players on two courts: Ivy sits out at most one of three rounds");
+        foreach (var round in new[] { 1, 2, 3 })
+        {
+            var games = await Round(round).Locator(".game-row .player-label").CountAsync();
+            Assert.That(games, Is.EqualTo(8), $"round {round}: eight play and one sits out");
+        }
+    }
+
+    [Test]
+    public async Task AddPlayer_AfterRoundOneIsComplete_JoinsRoundsTwoAndThreeOnly()
+    {
+        await SeedScheduleAsync(firstRoundComplete: true);
+        await StorePlayerListAsync("Ivy");
+        await StartEditingAsync();
+
+        await ChooseToAddAsync("i", "Ivy Test");
+
+        await Assertions.Expect(Banner.GetByText("Added Ivy T. to rounds 2–3 (shown in blue).")).ToBeVisibleAsync();
+        await Assertions.Expect(Round(1)).Not.ToContainTextAsync("Ivy");
+        await Assertions.Expect(Round(2)).ToContainTextAsync("Ivy T.");
+        await Assertions.Expect(Round(3)).ToContainTextAsync("Ivy T.");
+    }
+
+    [Test]
+    public async Task AddPlayer_ThenReloaded_IsStillInTheSchedule()
+    {
+        await SeedScheduleAsync(firstRoundComplete: true);
+        await StorePlayerListAsync("Ivy");
+        await StartEditingAsync();
+        await ChooseToAddAsync("i", "Ivy Test");
+        await Assertions.Expect(Round(2)).ToContainTextAsync("Ivy T.");
+
+        await Page.ReloadAsync();
+
+        await Assertions.Expect(Round(2)).ToContainTextAsync("Ivy T.");
+        await Assertions.Expect(Round(3)).ToContainTextAsync("Ivy T.");
+        await Assertions.Expect(Button("Done")).ToBeVisibleAsync();
+    }
+
+    [Test]
+    public async Task AddPlayer_ThenDone_ClearsTheBlueMarkers()
+    {
+        await SeedScheduleAsync(firstRoundComplete: true);
+        await StorePlayerListAsync("Ivy");
+        await StartEditingAsync();
+        await ChooseToAddAsync("i", "Ivy Test");
+        await Assertions.Expect(Page.Locator(".mark-changed").First).ToBeVisibleAsync();
+
+        await Button("Done").ClickAsync();
+
+        await Assertions.Expect(Page.Locator(".mark-changed")).ToHaveCountAsync(0);
+        await Assertions.Expect(Round(2)).ToContainTextAsync("Ivy T.");
+    }
+
+    [Test]
+    public async Task Remove_Option_AsksForConfirmationAndFitsTheScreen()
+    {
+        await SeedScheduleAsync();
+        await StartEditingAsync();
+
+        await RemoveFromScheduleAsync(2, "Cat");
+
+        await Assertions.Expect(Dialog.GetByRole(AriaRole.Heading, new() { Name = "Remove Cat Test?" })).ToBeVisibleAsync();
+        await Assertions.Expect(Dialog.GetByText("They are taken out of rounds 1–3 and the schedule is re-arranged.")).ToBeVisibleAsync();
+        await Assertions.Expect(Dialog.GetByRole(AriaRole.Button)).ToHaveTextAsync(["Cancel", "Remove"]);
+        await AssertDialogFitsAsync();
+    }
+
+    [Test]
+    public async Task Remove_Cancelled_KeepsThePlayer()
+    {
+        await SeedScheduleAsync();
+        await StartEditingAsync();
+        await RemoveFromScheduleAsync(2, "Cat");
+
+        await Dialog.GetByRole(AriaRole.Button, new() { Name = "Cancel", Exact = true }).ClickAsync();
+
+        await Assertions.Expect(Dialog).ToHaveCountAsync(0);
+        await Assertions.Expect(Page.Locator(".round-card", new() { HasText = "Cat T." })).ToHaveCountAsync(3);
+    }
+
+    [Test]
+    public async Task Remove_Confirmed_TakesThePlayerOutOfEveryRoundAndRearrangesThem()
+    {
+        await SeedScheduleAsync();
+        await StartEditingAsync();
+        await RemoveFromScheduleAsync(2, "Cat");
+
+        await Dialog.GetByRole(AriaRole.Button, new() { Name = "Remove", Exact = true }).ClickAsync();
+
+        await Assertions.Expect(Banner.GetByText("Removed Cat T. from rounds 1–3.")).ToBeVisibleAsync();
+        await Assertions.Expect(Page.Locator(".round-card", new() { HasText = "Cat T." })).ToHaveCountAsync(0);
+        foreach (var round in new[] { 1, 2, 3 })
+        {
+            Assert.That(await Round(round).Locator(".player-label").CountAsync(), Is.EqualTo(7), $"round {round}");
+        }
+    }
+
+    [Test]
+    public async Task Remove_WithACompletedRound_KeepsThePlayerThere()
+    {
+        await SeedScheduleAsync(firstRoundComplete: true);
+        await StartEditingAsync();
+        await RemoveFromScheduleAsync(2, "Cat");
+        await Assertions.Expect(Dialog.GetByText("They are taken out of rounds 2–3 and the schedule is re-arranged. Completed rounds keep them.")).ToBeVisibleAsync();
+
+        await Dialog.GetByRole(AriaRole.Button, new() { Name = "Remove", Exact = true }).ClickAsync();
+
+        await Assertions.Expect(Banner.GetByText("Removed Cat T. from rounds 2–3.")).ToBeVisibleAsync();
+        await Assertions.Expect(Round(1)).ToContainTextAsync("Cat T.");
+        await Assertions.Expect(Round(2)).Not.ToContainTextAsync("Cat T.");
+        await Assertions.Expect(Round(3)).Not.ToContainTextAsync("Cat T.");
+    }
+
+    [Test]
+    public async Task Remove_ThenReloaded_PlayerStaysOut()
+    {
+        await SeedScheduleAsync();
+        await StartEditingAsync();
+        await RemoveFromScheduleAsync(2, "Cat");
+        await Dialog.GetByRole(AriaRole.Button, new() { Name = "Remove", Exact = true }).ClickAsync();
+        await Assertions.Expect(Banner.GetByText("Removed Cat T. from rounds 1–3.")).ToBeVisibleAsync();
+
+        await Page.ReloadAsync();
+
+        await Assertions.Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Review schedule" })).ToBeVisibleAsync();
+        await Assertions.Expect(Page.Locator(".round-card", new() { HasText = "Cat T." })).ToHaveCountAsync(0);
+    }
+
+    [Test]
+    public async Task Remove_PinnedPlayer_IsOfferedAlongsideUnpin()
+    {
+        await SeedScheduleAsync();
+        await StartEditingAsync();
+        await HoldAsync(NameIn(2, "Cat"));
+        await Dialog.GetByRole(AriaRole.Button, new() { Name = "Pin", Exact = true }).ClickAsync();
+
+        await HoldAsync(NameIn(2, "Cat"));
+        await Dialog.GetByRole(AriaRole.Button, new() { Name = "Remove from schedule", Exact = true }).ClickAsync();
+        await Dialog.GetByRole(AriaRole.Button, new() { Name = "Remove", Exact = true }).ClickAsync();
+
+        await Assertions.Expect(Banner.GetByText("Removed Cat T. from rounds 1–3.")).ToBeVisibleAsync();
+    }
+
+    [Test]
+    public async Task Remove_PlayerInACompletedRound_IsNotOffered()
+    {
+        await SeedScheduleAsync(firstRoundComplete: true);
+        await StartEditingAsync();
+
+        await HoldAsync(NameIn(1, "Cat"));
+
+        await Assertions.Expect(Dialog.GetByRole(AriaRole.Button)).ToHaveTextAsync(["Close"]);
+    }
+
+    [Test]
+    public async Task Remove_WhenOnlyFourPlayersAreLeft_IsRefusedWithAMessage()
+    {
+        await SeedScheduleAsync();
+        var fourPlayers = Names.Take(4).Select((name, index) => new { Id = PlayerId(index), FirstName = name, LastName = "Test", Rank = (int?)null });
+        var rounds = new[]
+        {
+            new { Games = new[] { Game(0, 1, 2, 3, false) }, SittingOut = Array.Empty<Guid>() },
+            new { Games = new[] { Game(0, 2, 1, 3, false) }, SittingOut = Array.Empty<Guid>() },
+        };
+        var schedule = new { Id = Guid.NewGuid(), Step = "Review", Courts = new[] { 1 }, Players = fourPlayers, Rounds = rounds, Seed = 1 };
+        await Page.EvaluateAsync("json => localStorage.setItem('socialTennis.schedule', json)", JsonSerializer.Serialize(schedule));
+        await Page.ReloadAsync();
+        await StartEditingAsync();
+        await RemoveFromScheduleAsync(1, "Ann");
+
+        await Dialog.GetByRole(AriaRole.Button, new() { Name = "Remove", Exact = true }).ClickAsync();
+
+        await Assertions.Expect(Banner.GetByText("A schedule needs at least 4 players, so Ann T. can't be removed.")).ToBeVisibleAsync();
+        await Assertions.Expect(Page.Locator(".round-card", new() { HasText = "Ann T." })).ToHaveCountAsync(2);
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^Added Ivy T\. to rounds? [\d–, ]+ \(shown in blue\)\.$")]
+    private static partial System.Text.RegularExpressions.Regex AddedIvy();
 }

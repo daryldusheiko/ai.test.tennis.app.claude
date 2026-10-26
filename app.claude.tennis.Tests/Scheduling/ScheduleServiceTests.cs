@@ -130,4 +130,42 @@ public class ScheduleServiceTests
 
         Assert.That(await service.GetAsync(), Is.Null);
     }
+
+    [Test]
+    public async Task SaveAsync_EditMode_SurvivesClosingTheApp()
+    {
+        var storage = new InMemoryStorage();
+        var generated = ScheduleFlow.Generate(
+            ScheduleFlow.WithPlayers(ScheduleFlow.WithCourts(ScheduleFlow.Start(Guid.NewGuid()), [4, 5]), TestPlayers.Mixed(9)),
+            [],
+            3);
+        await new ScheduleService(storage).SaveAsync(generated);
+
+        var loaded = await new ScheduleService(storage).GetAsync();
+
+        Assert.That(loaded?.IsEditing, Is.True);
+    }
+
+    [Test]
+    public async Task GetAsync_ScheduleSavedBeforeEditModeWasKept_IsNotInEditMode()
+    {
+        var storage = new InMemoryStorage();
+        storage.Values[ScheduleService.ScheduleKey] = "{\"Id\":\"" + Guid.NewGuid() + "\",\"Step\":\"Review\",\"Courts\":[1],\"Players\":[],\"Rounds\":[],\"Seed\":1}";
+
+        var loaded = await new ScheduleService(storage).GetAsync();
+
+        Assert.That(loaded?.IsEditing, Is.False);
+    }
+
+    [Test]
+    public async Task DeleteAsync_StoredSchedule_IsGone()
+    {
+        var storage = new InMemoryStorage();
+        var service = new ScheduleService(storage);
+        await service.SaveAsync(ScheduleFlow.Start(Guid.NewGuid()));
+
+        await service.DeleteAsync();
+
+        Assert.That(await service.GetAsync(), Is.Null);
+    }
 }

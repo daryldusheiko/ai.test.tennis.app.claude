@@ -148,4 +148,32 @@ public class PlayerServiceTests
     [Test]
     public void FullName_NoLastName_HasNoTrailingSpace() =>
         Assert.That(Make(last: string.Empty).FullName, Is.EqualTo("Ann"));
+
+    [Test]
+    public async Task AddRangeAsync_NewAndExistingPlayers_AddsOnlyTheNewOnes()
+    {
+        var service = Create();
+        await service.SaveAsync(Make("Ann", "Smith"));
+
+        var result = await service.AddRangeAsync([Make("ann", "smith"), Make("Bob", "Jones")]);
+        var stored = await Create().GetAllAsync();
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That((result.Added, result.Skipped), Is.EqualTo((1, 1)));
+            Assert.That(stored.Select(player => player.FirstName), Is.EqualTo(["Ann", "Bob"]));
+        }
+    }
+
+    [Test]
+    public async Task AddRangeAsync_OnlyExistingPlayers_LeavesStorageUntouched()
+    {
+        var service = Create();
+        await service.SaveAsync(Make("Ann", "Smith"));
+        var before = _storage.Values[PlayerService.PlayersKey];
+
+        await service.AddRangeAsync([Make("Ann", "Smith")]);
+
+        Assert.That(_storage.Values[PlayerService.PlayersKey], Is.EqualTo(before));
+    }
 }
