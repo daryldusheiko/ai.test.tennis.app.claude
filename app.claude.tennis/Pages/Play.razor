@@ -17,20 +17,44 @@ else if (_schedule is not { Step: ScheduleStep.InPlay })
 else
 {
     <div class="page-section">
-        <ScheduleCards Schedule="_schedule" ShowCourts="true" />
+        <ScheduleCards Schedule="_schedule" ShowCourts="true" OnRoundAction="OpenRound" />
         <div class="form-buttons">
             <a class="button" href="schedule">Edit</a>
         </div>
     </div>
 }
 
+@if (_schedule is not null && _dialogRound is { } index && index < _schedule.Rounds.Count)
+{
+    var inPlay = RoundProgress.InPlayIndex(_schedule);
+    <RoundActionDialog Number="index + 1" Status="_schedule.Rounds[index].Status" OtherInPlay="inPlay is { } other && other != index ? other + 1 : null"
+                       OnStart="() => ApplyAsync(RoundProgress.Start)" OnFinish="() => ApplyAsync(RoundProgress.Finish)"
+                       OnCancelRound="() => ApplyAsync(RoundProgress.Cancel)" OnClose="CloseDialog" />
+}
+
 @code {
     private bool _loading = true;
     private Schedule? _schedule;
+    private int? _dialogRound;
 
     protected override async Task OnInitializedAsync()
     {
         _schedule = await Schedules.GetAsync();
         _loading = false;
+    }
+
+    private void OpenRound(int index) => _dialogRound = index;
+
+    private void CloseDialog() => _dialogRound = null;
+
+    private async Task ApplyAsync(Func<Schedule, int, Schedule> action)
+    {
+        if (_schedule is not null && _dialogRound is { } index)
+        {
+            _schedule = action(_schedule, index);
+            await Schedules.SaveAsync(_schedule);
+        }
+
+        _dialogRound = null;
     }
 }

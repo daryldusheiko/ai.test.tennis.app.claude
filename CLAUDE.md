@@ -39,9 +39,9 @@ Rules for working with them:
 - Repo root: `SocialTennis.slnx` (every project), `Directory.Build.props` (shared build settings and StyleCop), `.editorconfig`, `stylecop.json`, `scripts/`, `.github/workflows/deploy.yml`, `README.md`, `.gitignore` and this file.
 - `app.claude.tennis/`: the .NET 10 Blazor WebAssembly PWA (root namespace `SocialTennis`).
   - `Navigation/`: plain logic for the toolbar items and header titles (`AppNavigation`).
-  - `Layout/`: `MainLayout` (header, content, toolbar), `BottomToolbar`, `ToolbarIcon`, `ConfirmDialog` (centred confirmation), `ChoiceDialog` (centred dialog with any buttons: press-and-hold options, already played together), and the schedule components `CourtsStep`, `PlayersStep`, `ScheduleReview` (edit mode), `ScheduleCards` (round cards, shared by Review and Play), `PlayerLabel` (rank dot, pin icon, red/blue `PlayerMark`).
+  - `Layout/`: `MainLayout` (header, content, toolbar), `BottomToolbar`, `ToolbarIcon`, `ConfirmDialog` (centred confirmation), `ChoiceDialog` (centred dialog with any buttons: press-and-hold options, already played together), `RoundActionDialog` (Start / Finish / Cancel round), `CourtBall` (SVG tennis ball with the court number), and the schedule components `CourtsStep`, `PlayersStep`, `ScheduleReview` (edit mode), `ScheduleCards` (round cards, shared by Review and Play), `PlayerLabel` (rank dot, pin icon, red/blue `PlayerMark`).
   - `Players/`: plain logic: `Player`, `PlayerValidator`, `PlayerList` (search and sort), `PlayerService` (storage), `PlayerJsonContext`.
-  - `Scheduling/`: plain logic: `Schedule` (and `Round`, `Game`, `SchedulePlayer`, `ScheduleStep`), `ScheduleEngine` (the schedule rules), `ScheduleFlow` (create steps, play, reorder), `ScheduleEditor` (pin, swap, repeat partners, Re-schedule; with `PlayerSpot`, `PlayerPair`, `PlayerOptions`, `EditResult`, `RepeatPair`, `PlayedTogether`), `CourtList` (parse courts), `PlayerNames` (short names), `ScheduleService` (storage), `ScheduleStorageJsonContext`.
+  - `Scheduling/`: plain logic: `Schedule` (and `Round`, `Game`, `SchedulePlayer`, `ScheduleStep`), `ScheduleEngine` (the schedule rules), `ScheduleFlow` (create steps, play, reorder), `RoundProgress` (start, finish, cancel a round; `RoundStatus`), `ScheduleEditor` (pin, swap, repeat partners, Re-schedule; with `PlayerSpot`, `PlayerPair`, `PlayerOptions`, `EditResult`, `RepeatPair`, `PlayedTogether`), `CourtList` (parse courts), `PlayerNames` (short names), `ScheduleService` (storage), `ScheduleStorageJsonContext`.
   - `Storage/`: `IKeyValueStorage` and `LocalStorage` (browser localStorage via JS interop).
   - `Pages/`: thin routed pages (Play `/`, Players `/players`, PlayerEdit `/players/add` and `/players/edit/{id}`, SchedulePage `/schedule`, About, NotFound).
   - `wwwroot/`: `index.html`, `manifest.webmanifest`, icons, `js/pwa.js`, `js/reorder.js` (drag to reorder), `js/hold.js` (press and hold a name), `service-worker.js` (dev, no-op) and `service-worker.published.js` (offline cache, used by publish).
@@ -68,6 +68,7 @@ Run from the repo root:
 - Players (task 2): `Players.razor` lists, searches and sorts; `PlayerEdit.razor` adds, edits and deletes (with `ConfirmDialog`). Players are one JSON list in localStorage (`socialTennis.players`) and the sort choice is stored as `socialTennis.playerSort`; `PlayerService` is the only code that touches them. Serialisation is source-generated for trimming.
 - Schedule (task 3): one schedule in localStorage (`socialTennis.schedule`), saved after every step and resumed at the same `ScheduleStep` (Courts, Players, Review, InPlay). `SchedulePage` switches between `CourtsStep`, `PlayersStep` and `ScheduleReview`. `ScheduleEngine.Generate(players, courtCount, seed)` is a seeded randomised search; the Play page shows an in-play schedule read only with court numbers. Drag to reorder uses pointer events in `js/reorder.js`, which only reports the move back to `ScheduleCards`.
 - Editing (task 4): the Edit button on Review turns on edit mode (`ScheduleReview` state, not saved). Names become buttons; `js/hold.js` reports a 500 ms press-and-hold (or Enter on a focused name) to `ScheduleCards`, which opens a `ChoiceDialog` with the options from `ScheduleEditor.OptionsFor`. Pins (`Round.Pinned`), blue markers (`Round.Changed`) and kept-together pairs (`Schedule.AcceptedPairs`) are saved with the schedule; red is worked out from the rounds (`ScheduleEditor.RepeatPairs`). Re-schedule is a greedy search of swaps within a round that must reduce repeat partners without worsening fairness, opponent excess or rank clashes. Done and Play clear the blue markers.
+- Play (task 5): each `Round` has a saved `IsStarted` flag; `Round.Status` is Complete (all games complete), InPlay (started) or NotStarted. `ScheduleCards` with `ShowCourts` draws a `CourtBall` per game (blue/green/grey fills, white bold number with dark outline, seams at the edges), the status text and a ⋮ button per round header; `Play.razor` opens `RoundActionDialog` and saves through `RoundProgress`.
 - About is a placeholder until a later task fills it in.
 
 ## Zero diagnostics rule
@@ -94,7 +95,7 @@ Update this file as part of finishing each task, not afterwards:
 - [x] task2
 - [x] task3
 - [x] task4
-- [ ] task5
+- [x] task5
 - [ ] task6
 
 ## Decisions
@@ -148,4 +149,14 @@ Update this file as part of finishing each task, not afterwards:
 - **Re-schedule rules:** a swap must reduce repeat partners and must not make fairness (sit-outs, three-player games, singles within one of each other), opponent excess (over two, then over three) or 1-v-3 singles worse. Among those moves it prefers rounds the user has not touched, then fewer extra opponent repeats. Repeats that involve a completed game are left for the user's choice in the dialog; if only those remain the message is "Some partners already played together in a completed round: choose who should move."
 - **Press and hold** is a pointer timer in `js/hold.js` (500 ms, cancelled by moving more than 10 px or releasing). A hold swallows the click that follows. Enter on a focused name does the same for keyboards and is how most browser tests open the dialog without waiting; one test uses a real hold.
 - **Dialogs** use the existing centred `.dialog` (scrolls inside itself, clear of the safe areas); `ChoiceDialog` stacks its buttons.
+- No new packages.
+
+### Task 5
+
+- **Scope:** ball, row layout, round actions and dialog on the Play page. Close schedule and the Play-page messages beyond what exists are left for task 6; the Edit link on Play is unchanged.
+- **Round state:** "in play" is the saved `Round.IsStarted` flag (older saved schedules load as not started). Finish marks every game complete and clears the flag; Cancel only clears it. `RoundProgress` refuses to start a complete round or a second round.
+- **Ball:** an inline SVG (`CourtBall`), not an image, so it themes and needs no cache entry. Fills are blue `#1558b0`, green `#2a7a2e`, grey `#5b6166` (all above 4.5:1 against white; checked in a browser test). Two-digit numbers are squeezed with SVG `textLength` rather than shrunk so they stay tall and clear of the seams.
+- **Row layout:** `ball | side | v | side | spacer` with the spacer as wide as the ball, so the v is the centre of the row and each side is centred in its half. Rows without a ball (Review) are unchanged.
+- **Accessible names:** the ball is `role="img"` named "Court n"; the header button is named "Round n actions" and shows ⋮; the status text (In play / Complete) is shown only for those two states.
+- **Dialog:** reuses `ChoiceDialog` (already centred, scrolls inside itself and clears the safe areas); browser tests check it on the iPhone SE profile scrolled to the bottom and in a very short window.
 - No new packages.

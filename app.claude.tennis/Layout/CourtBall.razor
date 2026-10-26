@@ -1,0 +1,20 @@
+<span class="court-ball ball-@(Status switch { RoundStatus.InPlay => "green", RoundStatus.Complete => "grey", _ => "blue" })" role="img" aria-label="Court @Court">
+    <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+        <circle class="ball-fill" cx="24" cy="24" r="23" />
+        <path class="ball-seam" d="M8.6 7.5Q15 24 8.6 40.5M39.4 7.5Q33 24 39.4 40.5" />
+        <text class="ball-number" x="24" y="24" text-anchor="middle" dominant-baseline="central" font-size="@FontSize" textLength="@TextLength" lengthAdjust="spacingAndGlyphs">@Court</text>
+    </svg>
+</span>
+
+@code {
+    [Parameter, EditorRequired]
+    public int Court { get; set; }
+
+    [Parameter]
+    public RoundStatus Status { get; set; }
+
+    // The number fills most of the ball; longer numbers are squeezed narrower (not shrunk) so they stay clear of the seams at the edges.
+    private int FontSize => Court < 10 ? 32 : 26;
+
+    private int? TextLength => Court < 10 ? null : 21;
+}
