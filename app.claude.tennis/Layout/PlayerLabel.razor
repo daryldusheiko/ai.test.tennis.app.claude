@@ -1,9 +1,23 @@
-<span class="player-label">
+<span class="player-label@(Mark == PlayerMark.Repeat ? " mark-repeat" : Mark == PlayerMark.Changed ? " mark-changed" : string.Empty)">
     @if (ShowRank)
     {
         <span class="rank-dot rank-@(Rank?.ToString() ?? "none")" role="img" aria-label="@(Rank is { } rank ? $"Rank {rank}" : "No rank")"></span>
     }
     <span>@Name</span>
+    @if (Pinned)
+    {
+        <svg class="pin-icon" viewBox="0 0 16 16" role="img" aria-label="Pinned" focusable="false">
+            <path d="M9.5 1.5 14.5 6.5 13 7l-2 2 .5 3-1 1-2.5-2.5L4.5 14.5 3.5 14.5 3.5 13.5 6 11 3.5 8.5l1-1 3 .5 2-2z" fill="currentColor" />
+        </svg>
+    }
+    @if (Mark == PlayerMark.Repeat)
+    {
+        <span class="visually-hidden">(partners again)</span>
+    }
+    else if (Mark == PlayerMark.Changed)
+    {
+        <span class="visually-hidden">(moved)</span>
+    }
 </span>
 
 @code {
@@ -15,4 +29,10 @@
 
     [Parameter]
     public bool ShowRank { get; set; }
+
+    [Parameter]
+    public bool Pinned { get; set; }
+
+    [Parameter]
+    public PlayerMark Mark { get; set; }
 }

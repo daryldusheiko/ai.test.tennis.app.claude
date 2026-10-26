@@ -31,7 +31,7 @@ else
             <PlayersStep Chosen="_schedule.Players" OnChanged="SavePlayersAsync" OnBack="BackToCourtsAsync" OnNext="GenerateAsync" />
             break;
         default:
-            <ScheduleReview Schedule="_schedule" OnBack="BackToPlayersAsync" OnPlay="PlayAsync" OnMoveRound="MoveRoundAsync" OnMoveGame="MoveGameAsync" />
+            <ScheduleReview Schedule="_schedule" OnBack="BackToPlayersAsync" OnPlay="PlayAsync" OnChanged="SaveAsync" OnMoveRound="MoveRoundAsync" OnMoveGame="MoveGameAsync" />
             break;
     }
 }

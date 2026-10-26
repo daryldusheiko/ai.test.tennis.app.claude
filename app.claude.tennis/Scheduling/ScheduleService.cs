@@ -41,8 +41,11 @@ public sealed class ScheduleService(IKeyValueStorage storage)
     {
         Courts = schedule.Courts ?? [],
         Players = schedule.Players ?? [],
+        AcceptedPairs = schedule.AcceptedPairs ?? [],
         Rounds = [.. (schedule.Rounds ?? []).Select(round => round with
         {
+            Pinned = round.Pinned ?? [],
+            Changed = round.Changed ?? [],
             Games = [.. (round.Games ?? []).Select(game => game with { Team1 = game.Team1 ?? [], Team2 = game.Team2 ?? [] })],
             SittingOut = round.SittingOut ?? [],
         })],

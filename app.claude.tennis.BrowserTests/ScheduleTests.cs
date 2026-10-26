@@ -293,7 +293,7 @@ public class ScheduleTests : AppTestBase
         await Assertions.Expect(Rounds.First.Locator(".game-row").First.Locator(".team").First.Locator(".player-label")).ToHaveCountAsync(2);
         await Assertions.Expect(Page.GetByText("Court 4")).ToHaveCountAsync(0);
         await Assertions.Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Play", Exact = true })).ToBeVisibleAsync();
-        await Assertions.Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = true })).ToBeDisabledAsync();
+        await Assertions.Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = true })).ToBeEnabledAsync();
     }
 
     [Test]

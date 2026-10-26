@@ -1,0 +1,21 @@
+<div class="dialog-backdrop">
+    <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="choice-title" aria-describedby="choice-message">
+        <h2 id="choice-title">@Title</h2>
+        <p id="choice-message">@Message</p>
+        <div class="dialog-buttons stacked">
+            @ChildContent
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public string Message { get; set; } = string.Empty;
+
+    /// <summary>The option buttons, each a <c>button.button</c>; the last is usually Cancel or Close.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

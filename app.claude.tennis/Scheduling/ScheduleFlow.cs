@@ -11,7 +11,7 @@ public static class ScheduleFlow
     {
         ArgumentNullException.ThrowIfNull(schedule);
         ArgumentNullException.ThrowIfNull(courts);
-        return schedule with { Courts = [.. courts.Order()], Step = ScheduleStep.Players, Rounds = [] };
+        return schedule with { Courts = [.. courts.Order()], Step = ScheduleStep.Players, Rounds = [], AcceptedPairs = [] };
     }
 
     public static Schedule WithPlayers(Schedule schedule, IReadOnlyList<SchedulePlayer> players)
@@ -27,7 +27,7 @@ public static class ScheduleFlow
     public static Schedule BackToPlayers(Schedule schedule)
     {
         ArgumentNullException.ThrowIfNull(schedule);
-        return schedule with { Step = ScheduleStep.Players, Rounds = [] };
+        return schedule with { Step = ScheduleStep.Players, Rounds = [], AcceptedPairs = [] };
     }
 
     /// <summary>Builds the rounds. Names and ranks are taken from the current player list so late edits are used.</summary>
@@ -42,13 +42,13 @@ public static class ScheduleFlow
                 : chosen)
             .ToList();
         var rounds = ScheduleEngine.Generate(players, schedule.Courts.Count, seed);
-        return schedule with { Players = players, Rounds = rounds, Seed = seed, Step = ScheduleStep.Review };
+        return schedule with { Players = players, Rounds = rounds, Seed = seed, Step = ScheduleStep.Review, AcceptedPairs = [] };
     }
 
     public static Schedule Play(Schedule schedule)
     {
         ArgumentNullException.ThrowIfNull(schedule);
-        return schedule with { Step = ScheduleStep.InPlay };
+        return ScheduleEditor.ClearChanged(schedule) with { Step = ScheduleStep.InPlay };
     }
 
     /// <summary>Moves a round to a new position. Completed rounds can't move, and nothing can move onto one.</summary>

@@ -39,12 +39,12 @@ Rules for working with them:
 - Repo root: `SocialTennis.slnx` (every project), `Directory.Build.props` (shared build settings and StyleCop), `.editorconfig`, `stylecop.json`, `scripts/`, `.github/workflows/deploy.yml`, `README.md`, `.gitignore` and this file.
 - `app.claude.tennis/`: the .NET 10 Blazor WebAssembly PWA (root namespace `SocialTennis`).
   - `Navigation/`: plain logic for the toolbar items and header titles (`AppNavigation`).
-  - `Layout/`: `MainLayout` (header, content, toolbar), `BottomToolbar`, `ToolbarIcon`, `ConfirmDialog` (centred confirmation), and the schedule components `CourtsStep`, `PlayersStep`, `ScheduleReview`, `ScheduleCards` (round cards, shared by Review and Play), `PlayerLabel`.
+  - `Layout/`: `MainLayout` (header, content, toolbar), `BottomToolbar`, `ToolbarIcon`, `ConfirmDialog` (centred confirmation), `ChoiceDialog` (centred dialog with any buttons: press-and-hold options, already played together), and the schedule components `CourtsStep`, `PlayersStep`, `ScheduleReview` (edit mode), `ScheduleCards` (round cards, shared by Review and Play), `PlayerLabel` (rank dot, pin icon, red/blue `PlayerMark`).
   - `Players/`: plain logic: `Player`, `PlayerValidator`, `PlayerList` (search and sort), `PlayerService` (storage), `PlayerJsonContext`.
-  - `Scheduling/`: plain logic: `Schedule` (and `Round`, `Game`, `SchedulePlayer`, `ScheduleStep`), `ScheduleEngine` (the schedule rules), `ScheduleFlow` (create steps, play, reorder), `CourtList` (parse courts), `PlayerNames` (short names), `ScheduleService` (storage), `ScheduleStorageJsonContext`.
+  - `Scheduling/`: plain logic: `Schedule` (and `Round`, `Game`, `SchedulePlayer`, `ScheduleStep`), `ScheduleEngine` (the schedule rules), `ScheduleFlow` (create steps, play, reorder), `ScheduleEditor` (pin, swap, repeat partners, Re-schedule; with `PlayerSpot`, `PlayerPair`, `PlayerOptions`, `EditResult`, `RepeatPair`, `PlayedTogether`), `CourtList` (parse courts), `PlayerNames` (short names), `ScheduleService` (storage), `ScheduleStorageJsonContext`.
   - `Storage/`: `IKeyValueStorage` and `LocalStorage` (browser localStorage via JS interop).
   - `Pages/`: thin routed pages (Play `/`, Players `/players`, PlayerEdit `/players/add` and `/players/edit/{id}`, SchedulePage `/schedule`, About, NotFound).
-  - `wwwroot/`: `index.html`, `manifest.webmanifest`, icons, `js/pwa.js`, `js/reorder.js` (drag to reorder), `service-worker.js` (dev, no-op) and `service-worker.published.js` (offline cache, used by publish).
+  - `wwwroot/`: `index.html`, `manifest.webmanifest`, icons, `js/pwa.js`, `js/reorder.js` (drag to reorder), `js/hold.js` (press and hold a name), `service-worker.js` (dev, no-op) and `service-worker.published.js` (offline cache, used by publish).
   - `icon-source/icon.svg`: source of the PNG icons (rendered by hand with headless Chrome).
   - `docs/`: the governing documents.
 - `app.claude.tennis.Tests/`: NUnit unit tests (logic only, no browser).
@@ -67,6 +67,7 @@ Run from the repo root:
 - Offline: `service-worker.published.js` precaches every file in the generated `service-worker-assets.js` manifest (no integrity checks, see Decisions), answers navigations with the cached `index.html`, deletes older caches on activate, and takes over at once (`skipWaiting` + `clients.claim`). `js/pwa.js` registers it and reloads once when a new version takes control.
 - Players (task 2): `Players.razor` lists, searches and sorts; `PlayerEdit.razor` adds, edits and deletes (with `ConfirmDialog`). Players are one JSON list in localStorage (`socialTennis.players`) and the sort choice is stored as `socialTennis.playerSort`; `PlayerService` is the only code that touches them. Serialisation is source-generated for trimming.
 - Schedule (task 3): one schedule in localStorage (`socialTennis.schedule`), saved after every step and resumed at the same `ScheduleStep` (Courts, Players, Review, InPlay). `SchedulePage` switches between `CourtsStep`, `PlayersStep` and `ScheduleReview`. `ScheduleEngine.Generate(players, courtCount, seed)` is a seeded randomised search; the Play page shows an in-play schedule read only with court numbers. Drag to reorder uses pointer events in `js/reorder.js`, which only reports the move back to `ScheduleCards`.
+- Editing (task 4): the Edit button on Review turns on edit mode (`ScheduleReview` state, not saved). Names become buttons; `js/hold.js` reports a 500 ms press-and-hold (or Enter on a focused name) to `ScheduleCards`, which opens a `ChoiceDialog` with the options from `ScheduleEditor.OptionsFor`. Pins (`Round.Pinned`), blue markers (`Round.Changed`) and kept-together pairs (`Schedule.AcceptedPairs`) are saved with the schedule; red is worked out from the rounds (`ScheduleEditor.RepeatPairs`). Re-schedule is a greedy search of swaps within a round that must reduce repeat partners without worsening fairness, opponent excess or rank clashes. Done and Play clear the blue markers.
 - About is a placeholder until a later task fills it in.
 
 ## Zero diagnostics rule
@@ -92,7 +93,7 @@ Update this file as part of finishing each task, not afterwards:
 - [x] task1
 - [x] task2
 - [x] task3
-- [ ] task4
+- [x] task4
 - [ ] task5
 - [ ] task6
 
@@ -128,10 +129,23 @@ Update this file as part of finishing each task, not afterwards:
 - **Fair shares:** a player's three-player count includes both the lone player and the pair; which role they get is only a soft preference.
 - **Court order:** courts are saved ascending; game N is on the Nth lowest court. The odd game (three-player or singles) is placed last in the round, so it takes the highest court used.
 - **Names on cards** are first name plus last initial everywhere (the spec's card rule), so four names fit a row on an iPhone SE. Rank dots show on Review only; a singles game of rank 1 against rank 3 is shown in red.
-- **Edit button on Review** is shown disabled: the task says it is defined later. The Play page has an Edit link to Review (as the task asks), and Review hides the "‹ Players" link once the schedule is in play.
+- **Edit button on Review** was shown disabled in task 3 (task 4 turns it on). The Play page has an Edit link to Review (as the task asks), and Review hides the "‹ Players" link once the schedule is in play.
 - **Courts input:** blank entries from stray commas are ignored (`4,5,` is courts 4 and 5); a negative number gets "Court numbers must be 1 or more."
 - **Players step:** "Add" needs a suggestion to be picked first (as the spec says). Each add/remove is saved. Players are copied into the schedule, and names and ranks are refreshed from the player list when the schedule is generated.
 - **Generating** waits 50 ms before the (blocking) search so "Matching players…" can paint; the seed comes from `Random.Shared` in the page and is stored in the schedule.
 - **Layout fix:** `#app.loading` stays a centring grid after load, which let a tall page grow the shell past the screen; it now has a one-row grid.
 - **Not done (later tasks):** Edit mode, pins, swaps, Re-schedule, round start/finish, Close schedule, and sending the user to Players when nothing is in play.
+- No new packages.
+
+### Task 4
+
+- **Scope:** pin, unpin, swap, red and blue markers, Re-schedule and the already-played-together dialog, with the Edit/Done toggle on Review. Remove from schedule and Add a player are in `spec.md` but not in `task4.md` (they arrive with the later clean-up task), so the options dialog offers only Pin, Unpin and Swap. Nothing yet marks a game complete, so completed games are covered by unit tests and by seeded schedules in the browser tests; the Play page's round actions arrive in task 5.
+- **No pin confirmation:** `task4.md` mentions a "pin confirmation" but `spec.md` says "Pinning needs no confirmation", so Pin acts at once and the banner says "Pinned <name>."
+- **Pins and markers live on the round** (`Round.Pinned`, `Round.Changed`), so they move with a round when it is dragged. A pin keeps the player in their round's game; Re-schedule and Swap refuse to move them. Older saved schedules load with none.
+- **Edit mode is not saved** (only the pins, markers and kept pairs are). The newly-created-schedule-opens-in-edit-mode rule is in `task6.md`.
+- **Red and blue** show on Review (always) and never on Play; pin icons show on both. Colours are never the only signal: red and blue names carry hidden text "(partners again)" and "(moved)".
+- **Messages the spec leaves open:** "Pinned <name>.", "Unpinned <name>.", "Swapped <a> and <b>." (plus " Partners who play together twice are shown in red." when that happens), "<a> and <b> are both sitting out.", "Keeping <a> & <b> together." Messages that end in a short name's initial do not get a second full stop.
+- **Re-schedule rules:** a swap must reduce repeat partners and must not make fairness (sit-outs, three-player games, singles within one of each other), opponent excess (over two, then over three) or 1-v-3 singles worse. Among those moves it prefers rounds the user has not touched, then fewer extra opponent repeats. Repeats that involve a completed game are left for the user's choice in the dialog; if only those remain the message is "Some partners already played together in a completed round: choose who should move."
+- **Press and hold** is a pointer timer in `js/hold.js` (500 ms, cancelled by moving more than 10 px or releasing). A hold swallows the click that follows. Enter on a focused name does the same for keyboards and is how most browser tests open the dialog without waiting; one test uses a real hold.
+- **Dialogs** use the existing centred `.dialog` (scrolls inside itself, clear of the safe areas); `ChoiceDialog` stacks its buttons.
 - No new packages.

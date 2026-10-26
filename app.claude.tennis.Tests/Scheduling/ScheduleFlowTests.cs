@@ -107,6 +107,24 @@ public class ScheduleFlowTests
     }
 
     [Test]
+    public void Play_RoundsWithBlueMarkers_ClearsThemButKeepsPins()
+    {
+        var generated = ScheduleFlow.Generate(WithEightPlayers(out _), [], 1);
+        var game = generated.Rounds[0].Games[0];
+        var edited = ScheduleEditor.Pin(generated, new PlayerSpot(0, game.Team1[0])).Schedule;
+        edited = ScheduleEditor.Swap(edited, new PlayerSpot(0, game.Team1[1]), new PlayerSpot(0, game.Team2[0])).Schedule;
+
+        var playing = ScheduleFlow.Play(edited);
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(edited.Rounds[0].Changed, Is.Not.Empty);
+            Assert.That(playing.Rounds[0].Changed, Is.Empty);
+            Assert.That(playing.Rounds[0].Pinned, Has.Count.EqualTo(1));
+        }
+    }
+
+    [Test]
     public void MoveRound_ToAnotherPosition_ReordersRounds()
     {
         var generated = ScheduleFlow.Generate(WithEightPlayers(out _), [], 1);
