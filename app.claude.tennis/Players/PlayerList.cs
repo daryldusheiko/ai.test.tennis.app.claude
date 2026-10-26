@@ -38,4 +38,15 @@ public static class PlayerList
         };
         return [.. ordered];
     }
+
+    /// <summary>Players to suggest while typing: those matching the search who are not already chosen, by first name, up to a limit.</summary>
+    public static IReadOnlyList<Player> Suggest(IEnumerable<Player> players, string? search, IReadOnlySet<Guid> excluded, int limit)
+    {
+        ArgumentNullException.ThrowIfNull(players);
+        ArgumentNullException.ThrowIfNull(excluded);
+
+        return string.IsNullOrWhiteSpace(search)
+            ? []
+            : [.. Sort(Search(players.Where(player => !excluded.Contains(player.Id)), search), PlayerSortOrder.FirstNameAscending).Take(limit)];
+    }
 }

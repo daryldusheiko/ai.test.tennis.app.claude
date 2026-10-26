@@ -1,0 +1,42 @@
+<form class="page-section" @onsubmit="SubmitAsync" novalidate>
+    <h2>Courts</h2>
+
+    <label class="field-label" for="courts">Select courts</label>
+    <input id="courts" class="field" placeholder="e.g. 4,5,6" autocomplete="off" aria-describedby="courts-hint"
+           @bind="_text" @bind:event="oninput" />
+    <p id="courts-hint" class="hint">Enter the court numbers, separated by commas.</p>
+
+    @if (_error is not null)
+    {
+        <ul class="errors" role="alert">
+            <li>@_error</li>
+        </ul>
+    }
+
+    <div class="form-buttons">
+        <button type="submit" class="button primary">Next</button>
+    </div>
+</form>
+
+@code {
+    private string _text = string.Empty;
+    private string? _error;
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<int> Courts { get; set; } = [];
+
+    [Parameter]
+    public EventCallback<IReadOnlyList<int>> OnNext { get; set; }
+
+    protected override void OnInitialized() => _text = CourtList.Format(Courts);
+
+    private async Task SubmitAsync()
+    {
+        var result = CourtList.Parse(_text);
+        _error = result.Error;
+        if (_error is null)
+        {
+            await OnNext.InvokeAsync(result.Courts);
+        }
+    }
+}

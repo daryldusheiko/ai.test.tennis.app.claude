@@ -16,3 +16,10 @@ if ('serviceWorker' in navigator) {
 document.querySelector('#blazor-error-ui .dismiss')?.addEventListener('click', () => {
     document.getElementById('blazor-error-ui').style.display = 'none';
 });
+
+// A new step of a flow starts at the top of the page, not wherever the previous step was scrolled to.
+window.socialTennis = {
+    scrollToTop() {
+        document.querySelector('.app-content')?.scrollTo(0, 0);
+    },
+};

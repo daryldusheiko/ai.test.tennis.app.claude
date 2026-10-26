@@ -1,0 +1,38 @@
+<div class="page-section">
+    @if (Schedule.Step != ScheduleStep.InPlay)
+    {
+        <a class="back-link" href="schedule" @onclick="OnBack" @onclick:preventDefault>‹ Players</a>
+    }
+
+    <h2>Review schedule</h2>
+
+    @if (Schedule.Rounds.Count < ScheduleEngine.MaxRounds)
+    {
+        <p class="notice">With @Schedule.Players.Count players only @Schedule.Rounds.Count rounds are possible without anyone partnering the same player twice.</p>
+    }
+
+    <ScheduleCards Schedule="Schedule" ShowRank="true" Reorderable="true" OnMoveRound="OnMoveRound" OnMoveGame="OnMoveGame" />
+
+    <div class="form-buttons">
+        @* Editing the schedule is defined in a later task. *@
+        <button type="button" class="button" disabled>Edit</button>
+        <button type="button" class="button primary" @onclick="OnPlay">Play</button>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public Schedule Schedule { get; set; } = null!;
+
+    [Parameter]
+    public EventCallback OnBack { get; set; }
+
+    [Parameter]
+    public EventCallback OnPlay { get; set; }
+
+    [Parameter]
+    public EventCallback<RoundMove> OnMoveRound { get; set; }
+
+    [Parameter]
+    public EventCallback<GameMove> OnMoveGame { get; set; }
+}

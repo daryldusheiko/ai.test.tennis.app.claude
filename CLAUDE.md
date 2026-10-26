@@ -39,11 +39,12 @@ Rules for working with them:
 - Repo root: `SocialTennis.slnx` (every project), `Directory.Build.props` (shared build settings and StyleCop), `.editorconfig`, `stylecop.json`, `scripts/`, `.github/workflows/deploy.yml`, `README.md`, `.gitignore` and this file.
 - `app.claude.tennis/`: the .NET 10 Blazor WebAssembly PWA (root namespace `SocialTennis`).
   - `Navigation/`: plain logic for the toolbar items and header titles (`AppNavigation`).
-  - `Layout/`: `MainLayout` (header, content, toolbar), `BottomToolbar`, `ToolbarIcon`, `ConfirmDialog` (centred confirmation).
+  - `Layout/`: `MainLayout` (header, content, toolbar), `BottomToolbar`, `ToolbarIcon`, `ConfirmDialog` (centred confirmation), and the schedule components `CourtsStep`, `PlayersStep`, `ScheduleReview`, `ScheduleCards` (round cards, shared by Review and Play), `PlayerLabel`.
   - `Players/`: plain logic: `Player`, `PlayerValidator`, `PlayerList` (search and sort), `PlayerService` (storage), `PlayerJsonContext`.
+  - `Scheduling/`: plain logic: `Schedule` (and `Round`, `Game`, `SchedulePlayer`, `ScheduleStep`), `ScheduleEngine` (the schedule rules), `ScheduleFlow` (create steps, play, reorder), `CourtList` (parse courts), `PlayerNames` (short names), `ScheduleService` (storage), `ScheduleStorageJsonContext`.
   - `Storage/`: `IKeyValueStorage` and `LocalStorage` (browser localStorage via JS interop).
-  - `Pages/`: thin routed pages (Play `/`, Players `/players`, PlayerEdit `/players/add` and `/players/edit/{id}`, Schedule, About, NotFound).
-  - `wwwroot/`: `index.html`, `manifest.webmanifest`, icons, `js/pwa.js`, `service-worker.js` (dev, no-op) and `service-worker.published.js` (offline cache, used by publish).
+  - `Pages/`: thin routed pages (Play `/`, Players `/players`, PlayerEdit `/players/add` and `/players/edit/{id}`, SchedulePage `/schedule`, About, NotFound).
+  - `wwwroot/`: `index.html`, `manifest.webmanifest`, icons, `js/pwa.js`, `js/reorder.js` (drag to reorder), `service-worker.js` (dev, no-op) and `service-worker.published.js` (offline cache, used by publish).
   - `icon-source/icon.svg`: source of the PNG icons (rendered by hand with headless Chrome).
   - `docs/`: the governing documents.
 - `app.claude.tennis.Tests/`: NUnit unit tests (logic only, no browser).
@@ -65,7 +66,18 @@ Run from the repo root:
 - `MainLayout` shows an `h1` header with the current page label (from `AppNavigation.TitleFor`, updated on `LocationChanged`), the page in a scrolling `main`, and `BottomToolbar` (four `NavLink`s with SVG icons) at the bottom. Safe-area insets are respected. Light and dark colours are CSS variables in `wwwroot/css/app.css` (follows the device; a `data-theme` override is ready for the About page task).
 - Offline: `service-worker.published.js` precaches every file in the generated `service-worker-assets.js` manifest (no integrity checks, see Decisions), answers navigations with the cached `index.html`, deletes older caches on activate, and takes over at once (`skipWaiting` + `clients.claim`). `js/pwa.js` registers it and reloads once when a new version takes control.
 - Players (task 2): `Players.razor` lists, searches and sorts; `PlayerEdit.razor` adds, edits and deletes (with `ConfirmDialog`). Players are one JSON list in localStorage (`socialTennis.players`) and the sort choice is stored as `socialTennis.playerSort`; `PlayerService` is the only code that touches them. Serialisation is source-generated for trimming.
-- Schedule, About and Play are placeholders until the later tasks fill them in.
+- Schedule (task 3): one schedule in localStorage (`socialTennis.schedule`), saved after every step and resumed at the same `ScheduleStep` (Courts, Players, Review, InPlay). `SchedulePage` switches between `CourtsStep`, `PlayersStep` and `ScheduleReview`. `ScheduleEngine.Generate(players, courtCount, seed)` is a seeded randomised search; the Play page shows an in-play schedule read only with court numbers. Drag to reorder uses pointer events in `js/reorder.js`, which only reports the move back to `ScheduleCards`.
+- About is a placeholder until a later task fills it in.
+
+## Zero diagnostics rule
+
+**No errors, warnings or messages.** That includes IDE-only suggestions and hints, not just what `dotnet build` prints. Before calling any work done:
+
+- `dotnet build` and `dotnet build -c Release` show 0 warnings and 0 errors.
+- `dotnet format style SocialTennis.slnx --verify-no-changes --severity info` and `dotnet format analyzers SocialTennis.slnx --verify-no-changes --severity info` report nothing.
+- The IDE diagnostics (VS Code Problems) for the repo's files are empty. Stale entries for the unrelated `Claude.Tennis.App` solution outside the repo are not ours.
+
+Fix the cause; never suppress.
 
 ## Maintaining this file
 
@@ -79,7 +91,7 @@ Update this file as part of finishing each task, not afterwards:
 
 - [x] task1
 - [x] task2
-- [ ] task3
+- [x] task3
 - [ ] task4
 - [ ] task5
 - [ ] task6
@@ -107,3 +119,19 @@ Update this file as part of finishing each task, not afterwards:
 - **Sorting** uses ordinal, case-insensitive comparison so results do not depend on the browser's culture data.
 - **Validation** runs when Save is pressed (no `maxlength` on the inputs, so the spec's length messages can show).
 - **Branch:** `feature/task1` was not yet merged into `develop`, so task 2 work sits on top of it.
+
+### Task 3
+
+- **Page component name:** the routed page is `SchedulePage` (route `/schedule`) because `Schedule` is the model type.
+- **Engine:** per round, the players with the fewest turns at the "special" role (sitting out, or the three-player game, or singles; only one of these exists in a given session shape) take it, which keeps shares within one of each other. Doubles are then found by a depth-first search with a node budget, and whole attempts are repeated. Phases: opponents at most twice; then at most three times; then (singles only, and only if ranks 1 and 3 are both present) a rank 1 may play a rank 3, preferring fewer such games. 4 and 5 players give 3 and 5 rounds; otherwise 6.
+- **Opponent limit:** the spec's "at most twice" is not reached for 6 players with singles (the spec's own example) nor for 7 players with a three-player game (not found by a long search); both fall back to three. Tests allow three for those two sizes with two or more courts.
+- **Fair shares:** a player's three-player count includes both the lone player and the pair; which role they get is only a soft preference.
+- **Court order:** courts are saved ascending; game N is on the Nth lowest court. The odd game (three-player or singles) is placed last in the round, so it takes the highest court used.
+- **Names on cards** are first name plus last initial everywhere (the spec's card rule), so four names fit a row on an iPhone SE. Rank dots show on Review only; a singles game of rank 1 against rank 3 is shown in red.
+- **Edit button on Review** is shown disabled: the task says it is defined later. The Play page has an Edit link to Review (as the task asks), and Review hides the "‹ Players" link once the schedule is in play.
+- **Courts input:** blank entries from stray commas are ignored (`4,5,` is courts 4 and 5); a negative number gets "Court numbers must be 1 or more."
+- **Players step:** "Add" needs a suggestion to be picked first (as the spec says). Each add/remove is saved. Players are copied into the schedule, and names and ranks are refreshed from the player list when the schedule is generated.
+- **Generating** waits 50 ms before the (blocking) search so "Matching players…" can paint; the seed comes from `Random.Shared` in the page and is stored in the schedule.
+- **Layout fix:** `#app.loading` stays a centring grid after load, which let a tall page grow the shell past the screen; it now has a one-row grid.
+- **Not done (later tasks):** Edit mode, pins, swaps, Re-schedule, round start/finish, Close schedule, and sending the user to Players when nothing is in play.
+- No new packages.

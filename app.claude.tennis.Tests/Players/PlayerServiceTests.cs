@@ -114,7 +114,7 @@ public class PlayerServiceTests
     }
 
     [TestCase("not json")]
-    [TestCase("{\"Id\":1}")]
+    [TestCase(/*lang=json,strict*/ "{\"Id\":1}")]
     public async Task GetAllAsync_UnreadableData_IsEmptyRatherThanThrowing(string json)
     {
         _storage.Values[PlayerService.PlayersKey] = json;

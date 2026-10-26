@@ -1,0 +1,96 @@
+@using Microsoft.JSInterop
+@page "/schedule"
+@inject ScheduleService Schedules
+@inject PlayerService PlayerStore
+@inject NavigationManager Navigation
+@inject IJSRuntime Js
+
+<PageTitle>Social Tennis</PageTitle>
+
+@if (_loading)
+{
+    <p class="page-message">Loading…</p>
+}
+else if (_schedule is null)
+{
+    <div class="page-section">
+        <p class="page-message">There is no active schedule.</p>
+        <div class="form-buttons">
+            <button type="button" class="button primary" @onclick="CreateAsync">Create schedule</button>
+        </div>
+    </div>
+}
+else
+{
+    switch (_schedule.Step)
+    {
+        case ScheduleStep.Courts:
+            <CourtsStep Courts="_schedule.Courts" OnNext="SaveCourtsAsync" />
+            break;
+        case ScheduleStep.Players:
+            <PlayersStep Chosen="_schedule.Players" OnChanged="SavePlayersAsync" OnBack="BackToCourtsAsync" OnNext="GenerateAsync" />
+            break;
+        default:
+            <ScheduleReview Schedule="_schedule" OnBack="BackToPlayersAsync" OnPlay="PlayAsync" OnMoveRound="MoveRoundAsync" OnMoveGame="MoveGameAsync" />
+            break;
+    }
+}
+
+@code {
+    private bool _loading = true;
+    private bool _scrollToTop;
+    private Schedule? _schedule;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _schedule = await Schedules.GetAsync();
+        _loading = false;
+    }
+
+    private Task CreateAsync() => SaveAsync(ScheduleFlow.Start(Guid.NewGuid()));
+
+    private Task SaveCourtsAsync(IReadOnlyList<int> courts) => SaveAsync(ScheduleFlow.WithCourts(Current, courts));
+
+    // The step component keeps its own list, so saving here must not re-render it with a new parameter.
+    private Task SavePlayersAsync(IReadOnlyList<SchedulePlayer> players) =>
+        Schedules.SaveAsync(ScheduleFlow.WithPlayers(Current, players));
+
+    private Task BackToCourtsAsync(IReadOnlyList<SchedulePlayer> players) => SaveAsync(ScheduleFlow.BackToCourts(Current, players));
+
+    private Task BackToPlayersAsync() => SaveAsync(ScheduleFlow.BackToPlayers(Current));
+
+    private async Task GenerateAsync(IReadOnlyList<SchedulePlayer> players)
+    {
+        var withPlayers = ScheduleFlow.WithPlayers(Current, players);
+        var all = await PlayerStore.GetAllAsync();
+        await SaveAsync(ScheduleFlow.Generate(withPlayers, all, Random.Shared.Next()));
+    }
+
+    private Task MoveRoundAsync(RoundMove move) => SaveAsync(ScheduleFlow.MoveRound(Current, move.From, move.To));
+
+    private Task MoveGameAsync(GameMove move) => SaveAsync(ScheduleFlow.MoveGame(Current, move.Round, move.From, move.To));
+
+    private async Task PlayAsync()
+    {
+        await SaveAsync(ScheduleFlow.Play(Current));
+        Navigation.NavigateTo(string.Empty);
+    }
+
+    private Schedule Current => _schedule ?? throw new InvalidOperationException("There is no schedule.");
+
+    private async Task SaveAsync(Schedule schedule)
+    {
+        await Schedules.SaveAsync(schedule);
+        _scrollToTop = _schedule?.Step != schedule.Step;
+        _schedule = schedule;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_scrollToTop)
+        {
+            _scrollToTop = false;
+            await Js.InvokeVoidAsync("socialTennis.scrollToTop");
+        }
+    }
+}

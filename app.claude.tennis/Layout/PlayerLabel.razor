@@ -1,0 +1,18 @@
+<span class="player-label">
+    @if (ShowRank)
+    {
+        <span class="rank-dot rank-@(Rank?.ToString() ?? "none")" role="img" aria-label="@(Rank is { } rank ? $"Rank {rank}" : "No rank")"></span>
+    }
+    <span>@Name</span>
+</span>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Name { get; set; } = string.Empty;
+
+    [Parameter]
+    public int? Rank { get; set; }
+
+    [Parameter]
+    public bool ShowRank { get; set; }
+}

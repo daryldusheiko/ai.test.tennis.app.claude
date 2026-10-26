@@ -13,7 +13,7 @@ public class BrowserSetUp
     [OneTimeSetUp]
     public async Task SetUpAsync()
     {
-        var exitCode = Microsoft.Playwright.Program.Main(["install", "webkit"]);
+        var exitCode = Program.Main(["install", "webkit"]);
         Assert.That(exitCode, Is.Zero, "Playwright could not install WebKit");
 
         await PublishedSite.PublishAsync();
