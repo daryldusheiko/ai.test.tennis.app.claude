@@ -67,7 +67,7 @@ Remove the edit button and navigation from home.
 
 ## Game
 * When there are two players left over after a schedule. Add them to the extra court and make it a singles match
-  * Ensure that everyone gets a chance to play singles so that not the same person is playing.
+  * Ensure that everyone gets a chance to play singles so that not the same personis playing.
 
 ## About
 * Add and option to select light, dark, device theme
