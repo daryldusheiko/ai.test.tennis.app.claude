@@ -12,9 +12,19 @@
     {
         var round = Schedule.Rounds[roundIndex];
         var number = roundIndex + 1;
+        var thisRound = roundIndex;
         <section class="round-card" aria-label="Round @number" data-index="@roundIndex">
             <header class="round-header">
                 <h3>Round @number</h3>
+                @if (ShowCourts && round.Status != RoundStatus.NotStarted)
+                {
+                    <span class="round-status">@(round.Status == RoundStatus.InPlay ? "In play" : "Complete")</span>
+                }
+                @if (ShowCourts)
+                {
+                    <button type="button" class="round-action" aria-label="Round @number actions" disabled="@(round.Status == RoundStatus.Complete)"
+                            @onclick="() => OnRoundAction.InvokeAsync(thisRound)">⋮</button>
+                }
                 @if (Reorderable && !round.IsComplete)
                 {
                     <button type="button" class="drag-handle" data-drag="round" aria-label="Move round @number">||</button>
@@ -27,7 +37,7 @@
                 <div class="game-row@(clash ? " rank-clash" : string.Empty)" data-index="@gameIndex">
                     @if (ShowCourts)
                     {
-                        <span class="court-label">Court @CourtFor(gameIndex)</span>
+                        <CourtBall Court="CourtFor(gameIndex)" Status="round.Status" />
                     }
                     <div class="team">
                         @foreach (var id in game.Team1)
@@ -85,6 +95,10 @@
 
     [Parameter]
     public bool ShowRank { get; set; }
+
+    /// <summary>Reports the round whose action button (⋮) was pressed. The button shows with the courts.</summary>
+    [Parameter]
+    public EventCallback<int> OnRoundAction { get; set; }
 
     /// <summary>Shows the drag handles. Needs <see cref="Editable"/>.</summary>
     [Parameter]

@@ -10,5 +10,10 @@ public sealed record Round(IReadOnlyList<Game> Games, IReadOnlyList<Guid> Sittin
 
     public IReadOnlyList<Guid> Changed { get; init; } = [];
 
+    /// <summary>The round has been started and is being played. Saved so it survives closing the app.</summary>
+    public bool IsStarted { get; init; }
+
+    public RoundStatus Status => IsComplete ? RoundStatus.Complete : IsStarted ? RoundStatus.InPlay : RoundStatus.NotStarted;
+
     public bool IsComplete => Games.Count > 0 && Games.All(game => game.IsComplete);
 }

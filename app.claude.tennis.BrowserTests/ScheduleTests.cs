@@ -388,7 +388,7 @@ public class ScheduleTests : AppTestBase
 
         await Assertions.Expect(Header).ToHaveTextAsync("Play");
         await Assertions.Expect(Rounds).ToHaveCountAsync(6);
-        await Assertions.Expect(Rounds.First.Locator(".court-label")).ToHaveTextAsync(["Court 4", "Court 6"]);
+        await Assertions.Expect(Rounds.First.Locator(".court-ball .ball-number")).ToHaveTextAsync(["4", "6"]);
         await Assertions.Expect(Page.Locator(".drag-handle")).ToHaveCountAsync(0);
         await Assertions.Expect(Page.Locator(".rank-dot")).ToHaveCountAsync(0);
     }
@@ -400,7 +400,7 @@ public class ScheduleTests : AppTestBase
 
         await Page.GetByRole(AriaRole.Button, new() { Name = "Play", Exact = true }).ClickAsync();
 
-        await Assertions.Expect(Rounds.Nth(3).Locator(".court-label")).ToHaveTextAsync(["Court 4", "Court 5", "Court 6"]);
+        await Assertions.Expect(Rounds.Nth(3).Locator(".court-ball .ball-number")).ToHaveTextAsync(["4", "5", "6"]);
     }
 
     [Test]
@@ -415,7 +415,7 @@ public class ScheduleTests : AppTestBase
         await Page.GetByRole(AriaRole.Button, new() { Name = "Play", Exact = true }).ClickAsync();
 
         var played = Page.Locator(".round-card").First.Locator(".game-row").First;
-        await Assertions.Expect(played.Locator(".court-label")).ToHaveTextAsync("Court 4");
+        await Assertions.Expect(played.Locator(".court-ball .ball-number")).ToHaveTextAsync("4");
         Assert.That(await played.Locator(".team").AllInnerTextsAsync(), Is.EqualTo(second));
     }
 

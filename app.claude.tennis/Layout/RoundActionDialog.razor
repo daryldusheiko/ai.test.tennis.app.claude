@@ -1,0 +1,41 @@
+<ChoiceDialog Title="@($"Round {Number}")" Message="@Message">
+    @if (Status == RoundStatus.InPlay)
+    {
+        <button type="button" class="button primary" @onclick="OnFinish">Finish round</button>
+        <button type="button" class="button" @onclick="OnCancelRound">Cancel round</button>
+    }
+    else
+    {
+        <button type="button" class="button primary" disabled="@(OtherInPlay is not null)" @onclick="OnStart">Start round</button>
+    }
+
+    <button type="button" class="button" @onclick="OnClose">Close</button>
+</ChoiceDialog>
+
+@code {
+    [Parameter]
+    public int Number { get; set; }
+
+    [Parameter]
+    public RoundStatus Status { get; set; }
+
+    /// <summary>The number of another round that is in play, which blocks starting this one.</summary>
+    [Parameter]
+    public int? OtherInPlay { get; set; }
+
+    [Parameter]
+    public EventCallback OnStart { get; set; }
+
+    [Parameter]
+    public EventCallback OnFinish { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancelRound { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private string Message => Status == RoundStatus.InPlay ? "In play."
+        : OtherInPlay is { } other ? $"Round {other} is in play. Finish or cancel it before starting another."
+        : "Not started yet.";
+}
