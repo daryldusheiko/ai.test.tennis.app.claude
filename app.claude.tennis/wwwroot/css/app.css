@@ -13,6 +13,8 @@
     --accent-button: #0b5c2e;
     --danger: #b3261e;
     --danger-text: #b3261e;
+    --repeat-text: #b3261e;
+    --changed-text: #0b5cad;
 }
 
 :root[data-theme="light"] {
@@ -31,6 +33,8 @@
         --accent-button: #1f7a43;
         --danger: #c8372d;
         --danger-text: #ff9c94;
+        --repeat-text: #ff9c94;
+        --changed-text: #8ab8ff;
     }
 }
 
@@ -46,6 +50,8 @@
     --accent-button: #1f7a43;
     --danger: #c8372d;
     --danger-text: #ff9c94;
+    --repeat-text: #ff9c94;
+    --changed-text: #8ab8ff;
 }
 
 *,
@@ -459,4 +465,69 @@ h1:focus {
 .button:disabled {
     opacity: 0.5;
     cursor: default;
+}
+
+/* ---- Editing ---- */
+.edit-banner {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: flex-start;
+}
+
+.edit-banner p {
+    margin: 0;
+}
+
+.edit-result {
+    font-weight: 600;
+}
+
+.player-button {
+    min-height: 2.75rem;
+    padding: 0.25rem 0.5rem;
+    border: 1px dashed var(--border);
+    border-radius: 0.5rem;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+}
+
+.player-button.selected {
+    border: 2px solid var(--accent);
+    background: var(--bg);
+}
+
+.mark-repeat {
+    color: var(--repeat-text);
+    font-weight: 700;
+}
+
+.mark-changed {
+    color: var(--changed-text);
+    font-weight: 700;
+}
+
+.pin-icon {
+    flex: none;
+    width: 0.9rem;
+    height: 0.9rem;
+}
+
+.sitting-out {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.5rem;
+}
+
+.dialog-buttons.stacked {
+    flex-direction: column;
+    align-items: stretch;
 }

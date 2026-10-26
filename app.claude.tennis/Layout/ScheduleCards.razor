@@ -4,9 +4,10 @@
 
 @{
     var names = new PlayerNames(Schedule.Players);
+    var repeats = ShowMarks ? ScheduleEditor.RepeatPairs(Schedule) : [];
 }
 
-<div class="round-list" @ref="_root">
+<div class="round-list" @ref="_root" data-swapping="@(Swap is null ? "false" : "true")">
     @for (var roundIndex = 0; roundIndex < Schedule.Rounds.Count; roundIndex++)
     {
         var round = Schedule.Rounds[roundIndex];
@@ -31,14 +32,14 @@
                     <div class="team">
                         @foreach (var id in game.Team1)
                         {
-                            <PlayerLabel Name="@names.NameOf(id)" Rank="@RankOf(names, id)" ShowRank="ShowRank" />
+                            @Player(roundIndex, round, id, names, repeats)
                         }
                     </div>
                     <span class="versus" aria-hidden="true">v</span>
                     <div class="team">
                         @foreach (var id in game.Team2)
                         {
-                            <PlayerLabel Name="@names.NameOf(id)" Rank="@RankOf(names, id)" ShowRank="ShowRank" />
+                            @Player(roundIndex, round, id, names, repeats)
                         }
                     </div>
                     @if (clash)
@@ -53,16 +54,27 @@
             }
             @if (round.SittingOut.Count > 0)
             {
-                <p class="sitting-out">Sitting out: @string.Join(", ", round.SittingOut.Select(names.NameOf))</p>
+                <p class="sitting-out">
+                    Sitting out:
+                    @foreach (var id in round.SittingOut)
+                    {
+                        @Player(roundIndex, round, id, names, repeats)
+                    }
+                </p>
             }
         </section>
     }
 </div>
 
 @code {
+    /// <summary>How long a name must be pressed to count as a hold.</summary>
+    internal const int HoldMilliseconds = 500;
+
     private ElementReference _root;
     private IJSObjectReference? _module;
     private IJSObjectReference? _attached;
+    private IJSObjectReference? _holdModule;
+    private IJSObjectReference? _holdAttached;
     private DotNetObjectReference<ScheduleCards>? _self;
 
     [Parameter, EditorRequired]
@@ -74,8 +86,31 @@
     [Parameter]
     public bool ShowRank { get; set; }
 
+    /// <summary>Shows the drag handles. Needs <see cref="Editable"/>.</summary>
     [Parameter]
     public bool Reorderable { get; set; }
+
+    /// <summary>The review page: listens for dragging and for press-and-hold on names.</summary>
+    [Parameter]
+    public bool Editable { get; set; }
+
+    /// <summary>Names are buttons that can be held (edit mode).</summary>
+    [Parameter]
+    public bool Editing { get; set; }
+
+    /// <summary>Shows red (second partnership) and blue (moved) names.</summary>
+    [Parameter]
+    public bool ShowMarks { get; set; }
+
+    /// <summary>The player waiting to be swapped, highlighted.</summary>
+    [Parameter]
+    public PlayerSpot? Swap { get; set; }
+
+    [Parameter]
+    public EventCallback<PlayerSpot> OnPlayerHold { get; set; }
+
+    [Parameter]
+    public EventCallback<PlayerSpot> OnPlayerTap { get; set; }
 
     [Parameter]
     public EventCallback<RoundMove> OnMoveRound { get; set; }
@@ -96,13 +131,18 @@
         }
     }
 
+    [JSInvokable]
+    public Task PlayerHeld(int round, string player) => OnPlayerHold.InvokeAsync(new PlayerSpot(round, Guid.Parse(player)));
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && Reorderable)
+        if (firstRender && Editable)
         {
             _self = DotNetObjectReference.Create(this);
             _module = await Js.InvokeAsync<IJSObjectReference>("import", "./js/reorder.js");
             _attached = await _module.InvokeAsync<IJSObjectReference>("attach", _root, _self);
+            _holdModule = await Js.InvokeAsync<IJSObjectReference>("import", "./js/hold.js");
+            _holdAttached = await _holdModule.InvokeAsync<IJSObjectReference>("attach", _root, _self, HoldMilliseconds);
         }
     }
 
@@ -120,6 +160,17 @@
             {
                 await _module.DisposeAsync();
             }
+
+            if (_holdAttached is not null)
+            {
+                await _holdAttached.InvokeVoidAsync("dispose");
+                await _holdAttached.DisposeAsync();
+            }
+
+            if (_holdModule is not null)
+            {
+                await _holdModule.DisposeAsync();
+            }
         }
         catch (JSDisconnectedException)
         {
@@ -127,6 +178,42 @@
         }
 
         _self?.Dispose();
+    }
+
+    private RenderFragment Player(int roundIndex, Round round, Guid id, PlayerNames names, IReadOnlyList<RepeatPair> repeats)
+    {
+        var mark = repeats.Any(repeat => repeat.Rounds.Contains(roundIndex) && repeat.Pair.Contains(id)) ? PlayerMark.Repeat
+            : round.Changed.Contains(id) ? PlayerMark.Changed
+            : PlayerMark.None;
+        var label = new RenderFragment(builder =>
+        {
+            builder.OpenComponent<PlayerLabel>(0);
+            builder.AddComponentParameter(1, nameof(PlayerLabel.Name), names.NameOf(id));
+            builder.AddComponentParameter(2, nameof(PlayerLabel.Rank), RankOf(names, id));
+            builder.AddComponentParameter(3, nameof(PlayerLabel.ShowRank), ShowRank);
+            builder.AddComponentParameter(4, nameof(PlayerLabel.Pinned), round.Pinned.Contains(id));
+            builder.AddComponentParameter(5, nameof(PlayerLabel.Mark), mark);
+            builder.CloseComponent();
+        });
+        if (!Editing)
+        {
+            return label;
+        }
+
+        var spot = new PlayerSpot(roundIndex, id);
+        var selected = Swap == spot;
+        return builder =>
+        {
+            builder.OpenElement(0, "button");
+            builder.AddAttribute(1, "type", "button");
+            builder.AddAttribute(2, "class", selected ? "player-button selected" : "player-button");
+            builder.AddAttribute(3, "data-player", id.ToString());
+            builder.AddAttribute(4, "data-round", roundIndex.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            builder.AddAttribute(5, "aria-pressed", selected ? "true" : "false");
+            builder.AddAttribute(6, "onclick", EventCallback.Factory.Create(this, () => OnPlayerTap.InvokeAsync(spot)));
+            builder.AddContent(7, label);
+            builder.CloseElement();
+        };
     }
 
     private static int? RankOf(PlayerNames names, Guid id) => names.Players.GetValueOrDefault(id)?.Rank;

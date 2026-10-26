@@ -7,4 +7,8 @@ public sealed record Schedule(
     IReadOnlyList<int> Courts,
     IReadOnlyList<SchedulePlayer> Players,
     IReadOnlyList<Round> Rounds,
-    int Seed);
+    int Seed)
+{
+    /// <summary>Pairs the user chose to keep together although they partner more than once.</summary>
+    public IReadOnlyList<PlayerPair> AcceptedPairs { get; init; } = [];
+}
